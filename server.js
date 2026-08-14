@@ -7,7 +7,7 @@ const {
     getRecentMemory
 } = require("./memory");
 
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 const ROOT = path.join(__dirname, "..");
 
 const OLLAMA_URL = "http://127.0.0.1:11434/api/chat";
