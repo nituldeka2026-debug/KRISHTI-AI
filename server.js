@@ -7,11 +7,14 @@ const {
     getRecentMemory
 } = require("./memory");
 
-const PORT = process.env.PORT || 3000;
+const { GoogleGenAI } = require("@google/genai");
+
+const PORT = process.env.PORT || 10000;
+const HOST = "0.0.0.0";
 const ROOT = __dirname;
 
-const OLLAMA_URL = "http://127.0.0.1:11434/api/chat";
-const MODEL = "llama3.2:3b";
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+const GEMINI_MODEL = "gemini-2.5-flash";
 
 const mimeTypes = {
     ".html": "text/html; charset=utf-8",
@@ -52,133 +55,58 @@ async function handleChat(req, res) {
                 });
             }
 
+            if (!GEMINI_API_KEY) {
+                throw new Error(
+                    "GEMINI_API_KEY is not configured on the server."
+                );
+            }
+
+            const ai = new GoogleGenAI({
+                apiKey: GEMINI_API_KEY
+            });
+
             const memories = getRecentMemory(6);
 
-            const messages = [
-                {
-                    role: "system",
-                    content:
-                        "You are Krishti AI, a helpful and intelligent AI assistant. " +
-                        "Answer clearly, naturally and concisely."
-                }
-            ];
+            let conversation = "";
 
             for (const memory of memories) {
 
-                messages.push({
-                    role: "user",
-                    content: memory.user
-                });
-
-                messages.push({
-                    role: "assistant",
-                    content: memory.assistant
-                });
+                conversation +=
+                    `User: ${memory.user}\n` +
+                    `Krishti AI: ${memory.assistant}\n\n`;
             }
 
-            messages.push({
-                role: "user",
-                content: message
+            const prompt =
+                `You are Krishti AI, a helpful and intelligent AI assistant.
+Answer clearly, naturally and concisely.
+
+Previous conversation:
+${conversation}
+
+User's new message:
+${message}`;
+
+            const response = await ai.models.generateContent({
+                model: GEMINI_MODEL,
+                contents: prompt
             });
 
-            // Ollama STREAMING
-            const ollamaResponse = await fetch(OLLAMA_URL, {
-                method: "POST",
+            const fullResponse =
+                response.text || "Sorry, I could not generate a response.";
 
-                headers: {
-                    "Content-Type": "application/json"
-                },
-
-                body: JSON.stringify({
-                    model: MODEL,
-                    messages: messages,
-                    stream: true
-                })
-            });
-
-            if (!ollamaResponse.ok) {
-
-                const errorText = await ollamaResponse.text();
-
-                throw new Error(
-                    errorText || "Ollama request failed"
-                );
-            }
-
-            // Streaming response headers
-            res.writeHead(200, {
-                "Content-Type": "text/plain; charset=utf-8",
-                "Cache-Control": "no-cache",
-                "Connection": "keep-alive",
-                "Transfer-Encoding": "chunked"
-            });
-
-            let fullResponse = "";
-
-            const reader = ollamaResponse.body.getReader();
-            const decoder = new TextDecoder();
-
-            while (true) {
-
-                const { value, done } = await reader.read();
-
-                if (done) break;
-
-                const chunk = decoder.decode(value, {
-                    stream: true
-                });
-
-                const lines = chunk
-                    .split("\n")
-                    .filter(line => line.trim());
-
-                for (const line of lines) {
-
-                    try {
-
-                        const json = JSON.parse(line);
-
-                        if (json.message?.content) {
-
-                            const text = json.message.content;
-
-                            fullResponse += text;
-
-                            // Send token immediately
-                            res.write(text);
-                        }
-
-                    } catch (error) {
-                        // Ignore incomplete JSON chunks
-                    }
-                }
-            }
-
-            // Save complete conversation
             saveMemory(message, fullResponse);
 
-            res.end();
+            sendJSON(res, 200, {
+                reply: fullResponse
+            });
 
         } catch (error) {
 
-            console.error("AI ERROR:", error.message);
+            console.error("AI ERROR:", error);
 
-            if (!res.headersSent) {
-
-                sendJSON(res, 500, {
-                    reply: "Krishti AI error: " + error.message
-                });
-
-            } else {
-
-                res.write(
-                    "\n\n[Krishti AI Error: " +
-                    error.message +
-                    "]"
-                );
-
-                res.end();
-            }
+            sendJSON(res, 500, {
+                reply: "Krishti AI error: " + error.message
+            });
         }
     });
 }
@@ -236,16 +164,15 @@ const server = http.createServer((req, res) => {
     res.end("404 - Not Found");
 });
 
-server.listen(PORT, () => {
+server.listen(PORT, HOST, () => {
 
     console.log("");
     console.log("=================================");
     console.log("       KRISHTI AI SERVER");
     console.log("=================================");
-    console.log("Website: http://localhost:3000");
-    console.log("Model: " + MODEL);
+    console.log(`Website: http://${HOST}:${PORT}`);
+    console.log("Model: " + GEMINI_MODEL);
     console.log("Memory: ENABLED");
-    console.log("Streaming: ENABLED");
-    console.log("Ollama: " + OLLAMA_URL);
+    console.log("AI: GEMINI");
     console.log("=================================");
 });
