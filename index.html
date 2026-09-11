@@ -2,7 +2,15 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0, viewport-fit=cover"
+    >
+
+    <meta
+        name="theme-color"
+        content="#0b0f19"
+    >
 
     <title>Krishti AI</title>
 
@@ -11,91 +19,186 @@
 
 <body>
 
-    <div class="app">
+<div class="app">
 
-        <!-- Sidebar -->
-        <aside class="sidebar">
+    <!-- ==============================
+         SIDEBAR
+    =============================== -->
 
-            <div class="logo">
-                🤖 <span>Krishti AI</span>
+    <aside class="sidebar">
+
+        <div class="logo">
+            🤖 <span>Krishti AI</span>
+        </div>
+
+        <button
+            class="new-chat"
+            type="button"
+        >
+            + New Chat
+        </button>
+
+        <div class="menu">
+
+            <div class="menu-item">
+                💬 <span>Chats</span>
             </div>
 
-            <button class="new-chat">
-                + New Chat
+            <div class="menu-item">
+                💻 <span>Developer</span>
+            </div>
+
+            <div class="menu-item">
+                📄 <span>Documents</span>
+            </div>
+
+            <div class="menu-item">
+                🖼️ <span>Images</span>
+            </div>
+
+            <div class="menu-item">
+                🌐 <span>Web Search</span>
+            </div>
+
+        </div>
+
+        <div class="sidebar-bottom">
+            ⚙️ Settings
+        </div>
+
+    </aside>
+
+
+    <!-- ==============================
+         MAIN CHAT
+    =============================== -->
+
+    <main class="chat-area">
+
+        <!-- Topbar -->
+
+        <header class="topbar">
+
+            <div class="topbar-title">
+                <h2>Krishti AI</h2>
+
+                <span>
+                    AI Assistant
+                </span>
+            </div>
+
+            <div class="online-status">
+                <span class="status-dot"></span>
+                Online
+            </div>
+
+        </header>
+
+
+        <!-- ==============================
+             WELCOME
+        =============================== -->
+
+        <section class="welcome">
+
+            <div class="robot">
+                🤖
+            </div>
+
+            <h1>
+                Hello! I'm Krishti AI
+            </h1>
+
+            <p>
+                Your intelligent AI assistant
+            </p>
+
+            <div class="quick-actions">
+
+                <button
+                    type="button"
+                    data-prompt="Write a professional JavaScript code example for me."
+                >
+                    💻 Write Code
+                </button>
+
+                <button
+                    type="button"
+                    data-prompt="Explain how to analyse and understand a document."
+                >
+                    📄 Analyse Document
+                </button>
+
+                <button
+                    type="button"
+                    data-prompt="Help me find information about a topic and explain what I should search for."
+                >
+                    🌐 Search Web
+                </button>
+
+                <button
+                    type="button"
+                    data-prompt="Give me some useful and creative ideas."
+                >
+                    💡 Get Ideas
+                </button>
+
+            </div>
+
+        </section>
+
+
+        <!-- ==============================
+             CHAT MESSAGES
+        =============================== -->
+
+        <section
+            class="messages"
+            aria-live="polite"
+        ></section>
+
+
+        <!-- ==============================
+             INPUT
+        =============================== -->
+
+        <form
+            class="input-area"
+            autocomplete="off"
+        >
+
+            <input
+                type="text"
+                placeholder="Ask Krishti AI anything..."
+                aria-label="Message"
+                maxlength="10000"
+            >
+
+            <button
+                class="voice"
+                type="button"
+                aria-label="Voice input"
+                title="Voice input"
+            >
+                🎤
             </button>
 
-            <div class="menu">
-                <div>💬 Chats</div>
-                <div>💻 Developer</div>
-                <div>📄 Documents</div>
-                <div>🖼️ Images</div>
-                <div>🌐 Web Search</div>
-            </div>
+            <button
+                class="send"
+                type="submit"
+                aria-label="Send message"
+                title="Send message"
+            >
+                ➤
+            </button>
 
-            <div class="sidebar-bottom">
-                ⚙️ Settings
-            </div>
+        </form>
 
-        </aside>
+    </main>
 
+</div>
 
-        <!-- Main Chat Area -->
-        <main class="chat-area">
-
-            <header class="topbar">
-                <h2>Krishti AI</h2>
-                <span>AI Assistant</span>
-            </header>
-
-
-            <section class="welcome">
-
-                <div class="robot">
-                    🤖
-                </div>
-
-                <h1>Hello! I'm Krishti AI</h1>
-
-                <p>
-                    Your intelligent AI assistant
-                </p>
-
-
-                <div class="quick-actions">
-
-                    <button>💻 Write Code</button>
-
-                    <button>📄 Analyse Document</button>
-
-                    <button>🌐 Search Web</button>
-
-                    <button>💡 Get Ideas</button>
-
-                </div>
-
-            </section>
-
-
-            <!-- Message Input -->
-
-            <div class="input-area">
-
-                <input
-                    type="text"
-                    placeholder="Ask Krishti AI anything..."
-                >
-
-                <button class="voice">🎤</button>
-
-                <button class="send">➤</button>
-
-            </div>
-
-        </main>
-
-    </div>
-
-    <script src="script.js"></script>
+<script src="script.js"></script>
 
 </body>
 </html>
