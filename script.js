@@ -27,8 +27,9 @@ async function sendMessage() {
 
     try {
 
+        // Render deployed server
         const response = await fetch(
-            "http://localhost:3000/api/chat",
+            "/api/chat",
             {
                 method: "POST",
 
@@ -50,7 +51,7 @@ async function sendMessage() {
 
         if (!response.body) {
             throw new Error(
-                "Streaming is not supported."
+                "No response from server."
             );
         }
 
@@ -88,8 +89,10 @@ async function sendMessage() {
         }
 
         if (!fullText.trim()) {
+
             aiText.textContent =
                 "No response received.";
+
         }
 
     } catch (error) {
