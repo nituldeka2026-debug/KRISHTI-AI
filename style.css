@@ -977,3 +977,34 @@ body {
         margin-bottom: env(safe-area-inset-bottom);
     }
 }
+
+
+/* =========================================================
+   PHOTO TIMELINE STUDIO
+========================================================= */
+.timeline-panel { width:min(900px,calc(100% - 30px)); margin:12px auto 18px; padding:22px; border:1px solid #2d3950; border-radius:22px; background:linear-gradient(145deg,#111827,#0d1422); box-shadow:0 18px 55px rgba(0,0,0,.24); }
+.timeline-heading h2 { margin:9px 0 5px; font-size:25px; }
+.timeline-heading p { margin:0; color:#94a3b8; line-height:1.5; }
+.timeline-badge { display:inline-flex; padding:5px 9px; border-radius:999px; background:rgba(109,93,252,.12); color:#b8afff; font-size:11px; font-weight:800; letter-spacing:.08em; }
+.timeline-upload { margin-top:18px; min-height:145px; border:2px dashed #334155; border-radius:18px; display:flex; flex-direction:column; align-items:center; justify-content:center; cursor:pointer; background:rgba(255,255,255,.015); transition:.2s; }
+.timeline-upload:hover { border-color:#6d5dfc; background:rgba(109,93,252,.06); }
+.timeline-upload-icon { font-size:38px; margin-bottom:7px; }
+.timeline-upload span { margin-top:5px; color:#64748b; font-size:12px; }
+.timeline-preview { display:none; margin-top:14px; text-align:center; }
+.timeline-preview.visible { display:block; }
+.timeline-preview img { width:auto; max-width:100%; max-height:320px; border-radius:16px; object-fit:contain; border:1px solid #293548; }
+.timeline-options { display:grid; grid-template-columns:repeat(6,minmax(0,1fr)); gap:9px; margin-top:15px; }
+.timeline-options button { min-height:58px; border:1px solid #293548; border-radius:13px; background:#151d2d; color:#e5e7eb; cursor:pointer; font-size:14px; transition:transform .15s,border-color .15s,background .15s; }
+.timeline-options button:hover { transform:translateY(-1px); border-color:#6d5dfc; }
+.timeline-options button.active { background:#3d347e; border-color:#8b7dff; box-shadow:0 0 0 2px rgba(109,93,252,.14); }
+.timeline-options button span { display:block; margin-top:3px; font-size:12px; }
+.timeline-generate { width:100%; margin-top:15px; padding:14px; border:0; border-radius:13px; background:linear-gradient(135deg,#6d5dfc,#8b5cf6); color:white; font-size:15px; font-weight:800; cursor:pointer; }
+.timeline-generate:disabled { opacity:.55; cursor:not-allowed; }
+.timeline-status { min-height:22px; margin-top:11px; text-align:center; color:#94a3b8; font-size:13px; }
+.timeline-result { display:none; margin-top:16px; text-align:center; }
+.timeline-result.visible { display:block; }
+.timeline-result img { max-width:100%; max-height:650px; border-radius:18px; border:1px solid #293548; box-shadow:0 15px 45px rgba(0,0,0,.35); }
+.timeline-download { display:inline-flex; margin-top:11px; padding:10px 16px; border-radius:10px; background:#202b40; color:white; text-decoration:none; border:1px solid #344155; }
+.timeline-download:hover { background:#2b3952; }
+@media (max-width:800px){ .timeline-options{grid-template-columns:repeat(3,1fr);} }
+@media (max-width:500px){ .timeline-panel{width:calc(100% - 20px);padding:16px;border-radius:18px;} .timeline-heading h2{font-size:21px;} .timeline-options{grid-template-columns:repeat(2,1fr);} .timeline-upload{min-height:125px;} }

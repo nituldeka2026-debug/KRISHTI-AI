@@ -909,11 +909,8 @@ sidebarItems.forEach(
                 else if (
                     text.includes("images")
                 ) {
-
-                    addMessage(
-                        "🖼️ Image analysis will be added in the next stage.",
-                        "ai"
-                    );
+                    if (timelinePanel) timelinePanel.scrollIntoView({ behavior: "smooth", block: "start" });
+                    setTimelineStatus("🖼️ Photo Timeline Studio is ready.");
                 }
 
 
@@ -930,6 +927,49 @@ sidebarItems.forEach(
     }
 );
 
+
+// =========================================================
+// PHOTO TIMELINE STUDIO
+// =========================================================
+
+const timelineImage = document.getElementById("timelineImage");
+const timelinePreview = document.getElementById("timelinePreview");
+const timelineGenerate = document.getElementById("generateTimeline");
+const timelineStatus = document.getElementById("timelineStatus");
+const timelineResult = document.getElementById("timelineResult");
+const timelineButtons = document.querySelectorAll(".timeline-options button");
+const timelinePanel = document.getElementById("timelinePanel");
+let timelineFile = null;
+let selectedEra = "";
+
+function setTimelineStatus(message){ if(timelineStatus) timelineStatus.textContent=message||""; }
+
+if(timelineImage){ timelineImage.addEventListener("change",event=>{
+    const file=event.target.files&&event.target.files[0]; if(!file)return;
+    if(!["image/jpeg","image/png","image/webp"].includes(file.type)){ timelineFile=null; setTimelineStatus("❌ Please choose JPG, PNG or WEBP."); return; }
+    if(file.size>10*1024*1024){ timelineFile=null; setTimelineStatus("❌ Image is larger than 10 MB."); return; }
+    timelineFile=file; const reader=new FileReader();
+    reader.onload=()=>{ timelinePreview.innerHTML=`<img src="${reader.result}" alt="Selected photo preview">`; timelinePreview.classList.add("visible"); timelineResult.innerHTML=""; timelineResult.classList.remove("visible"); setTimelineStatus("✅ Photo selected. Now choose a timeline."); };
+    reader.onerror=()=>setTimelineStatus("❌ Could not read the photo."); reader.readAsDataURL(file);
+}); }
+
+timelineButtons.forEach(button=>button.addEventListener("click",()=>{ timelineButtons.forEach(btn=>btn.classList.remove("active")); button.classList.add("active"); selectedEra=button.dataset.era||""; setTimelineStatus(`Selected: ${selectedEra}`); }));
+
+async function generateTimelinePhoto(){
+    if(!timelineFile){setTimelineStatus("⚠️ Upload a photo first.");return;}
+    if(!selectedEra){setTimelineStatus("⚠️ Select a timeline first.");return;}
+    timelineGenerate.disabled=true; setTimelineStatus(`✨ Creating your ${selectedEra} version...`); timelineResult.innerHTML=""; timelineResult.classList.remove("visible");
+    try{
+        const payload=await fileToGeminiPayload(timelineFile);
+        const response=await fetch("/api/timeline",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({image:payload.data,mimeType:payload.mimeType,era:selectedEra})});
+        const raw=await response.text(); let data; try{data=JSON.parse(raw);}catch{data={error:raw};}
+        if(!response.ok||!data.success||!data.image)throw new Error(data.error||"Timeline generation failed.");
+        const imageSrc=`data:${data.mimeType||"image/png"};base64,${data.image}`;
+        timelineResult.innerHTML=`<img src="${imageSrc}" alt="Generated ${escapeHTML(selectedEra)} timeline photo"><br><a class="timeline-download" download="krishti-${selectedEra}.png" href="${imageSrc}">⬇️ Download Image</a>`;
+        timelineResult.classList.add("visible"); setTimelineStatus(`✅ ${selectedEra} timeline created successfully.`);
+    }catch(error){console.error("Timeline generation error:",error);setTimelineStatus(`❌ ${error.message||"Timeline generation failed."}`);}finally{timelineGenerate.disabled=false;}
+}
+if(timelineGenerate)timelineGenerate.addEventListener("click",generateTimelinePhoto);
 
 // =========================================================
 // STARTUP

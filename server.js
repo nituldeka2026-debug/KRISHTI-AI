@@ -412,6 +412,51 @@ function getGeminiErrorMessage(
 
 
 /* =========================================================
+   PHOTO TIMELINE IMAGE API
+========================================================= */
+
+const TIMELINE_MODEL = process.env.GEMINI_IMAGE_MODEL || "gemini-3.1-flash-image";
+const TIMELINE_ERAS = new Set(["1980s","1990s","2000s","2010s","2020s","2050"]);
+
+function timelinePrompt(era){
+    const details={
+        "1980s":"authentic 1980s fashion, hairstyle, environment, film-camera character and era-appropriate styling",
+        "1990s":"authentic 1990s fashion, hairstyle, environment, film-camera character and era-appropriate styling",
+        "2000s":"authentic early-2000s fashion, hairstyle, environment and digital-camera character",
+        "2010s":"authentic 2010s fashion, hairstyle, environment and realistic digital photography",
+        "2020s":"modern 2020s fashion, environment, natural skin texture and contemporary photography",
+        "2050":"a believable near-future 2050 setting, futuristic but realistic clothing, environment and technology"
+    }[era];
+    return `Transform the supplied photograph into a realistic ${era} timeline version.
+
+Preserve the person's identity, recognizable facial structure, approximate age in the source, pose/composition where practical, natural skin texture and important personal features. Do not replace the person with a different person. Do not add text, captions, logos or watermarks.
+
+Era direction: ${details}. The result should look like a real photograph from this timeline, with coherent lighting, clothing, hair, background and camera characteristics. Keep the transformation tasteful and realistic.`;
+}
+
+async function handleTimeline(req,res){
+    try{
+        const body=await readRequestBody(req); let data;
+        try{data=JSON.parse(body);}catch{return sendJSON(res,400,{success:false,error:"Invalid JSON request."});}
+        const image=typeof data.image==="string"?data.image:""; const mimeType=typeof data.mimeType==="string"?data.mimeType:""; const era=typeof data.era==="string"?data.era:"";
+        if(!GEMINI_API_KEY)return sendJSON(res,500,{success:false,error:"Gemini API key is not configured on the server."});
+        if(!image)return sendJSON(res,400,{success:false,error:"Photo is required."});
+        if(!TIMELINE_ERAS.has(era))return sendJSON(res,400,{success:false,error:"Invalid timeline selected."});
+        if(!["image/jpeg","image/png","image/webp"].includes(mimeType))return sendJSON(res,400,{success:false,error:"Only JPG, PNG and WEBP images are supported."});
+        if(Buffer.byteLength(image,"base64")>10*1024*1024)return sendJSON(res,413,{success:false,error:"Image is larger than 10 MB."});
+
+        const ai=new GoogleGenAI({apiKey:GEMINI_API_KEY});
+        const response=await ai.models.generateContent({model:TIMELINE_MODEL,contents:[{text:timelinePrompt(era)},{inlineData:{mimeType,data:image}}],config:{responseModalities:["IMAGE"]}});
+        const parts=response?.candidates?.[0]?.content?.parts||[]; const imagePart=parts.find(part=>part&&part.inlineData&&part.inlineData.data);
+        if(!imagePart)throw new Error("The image model did not return an image.");
+        return sendJSON(res,200,{success:true,era,image:imagePart.inlineData.data,mimeType:imagePart.inlineData.mimeType||"image/png"});
+    }catch(error){
+        console.error("Timeline API error:",error);
+        return sendJSON(res,500,{success:false,error:getGeminiErrorMessage(error)});
+    }
+}
+
+/* =========================================================
    CHAT API
 ========================================================= */
 
@@ -809,6 +854,8 @@ function handleHealth(
             model: GEMINI_MODEL,
             memory: "enabled",
             streaming: true,
+            imageGeneration: true,
+            imageModel: TIMELINE_MODEL,
             status: "online"
         }
     );
@@ -997,6 +1044,18 @@ const server =
                     res
                 );
 
+                return;
+            }
+
+            /* =====================================
+               PHOTO TIMELINE API
+            ===================================== */
+
+            if (
+                req.method === "POST" &&
+                pathname === "/api/timeline"
+            ) {
+                handleTimeline(req,res);
                 return;
             }
 

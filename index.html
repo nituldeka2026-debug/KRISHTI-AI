@@ -217,6 +217,42 @@
          CHAT MESSAGES
     =============================== -->
 
+    <!-- ==============================
+         PHOTO TIMELINE STUDIO
+    =============================== -->
+
+    <section class="timeline-panel" id="timelinePanel" aria-label="Photo Timeline Studio">
+        <div class="timeline-heading">
+            <div>
+                <span class="timeline-badge">✨ AI IMAGE STUDIO</span>
+                <h2>Photo → Another Timeline</h2>
+                <p>Upload a photo and transform its visual era while keeping the subject recognizable.</p>
+            </div>
+        </div>
+
+        <label class="timeline-upload" for="timelineImage">
+            <input type="file" id="timelineImage" accept="image/jpeg,image/png,image/webp" hidden>
+            <div class="timeline-upload-icon">📸</div>
+            <strong>Upload a photo</strong>
+            <span>JPG, PNG or WEBP • Max 10 MB</span>
+        </label>
+
+        <div id="timelinePreview" class="timeline-preview"></div>
+
+        <div class="timeline-options" role="group" aria-label="Timeline choices">
+            <button type="button" data-era="1980s">🕰️ <span>1980s</span></button>
+            <button type="button" data-era="1990s">📼 <span>1990s</span></button>
+            <button type="button" data-era="2000s">💿 <span>2000s</span></button>
+            <button type="button" data-era="2010s">📱 <span>2010s</span></button>
+            <button type="button" data-era="2020s">✨ <span>2020s</span></button>
+            <button type="button" data-era="2050">🚀 <span>2050 Future</span></button>
+        </div>
+
+        <button id="generateTimeline" class="timeline-generate" type="button">✨ Generate Timeline Photo</button>
+        <div id="timelineStatus" class="timeline-status" role="status"></div>
+        <div id="timelineResult" class="timeline-result"></div>
+    </section>
+
     <section
         class="messages"
         aria-live="polite"
