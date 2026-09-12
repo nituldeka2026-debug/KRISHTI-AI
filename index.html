@@ -1,204 +1,284 @@
-<!DOCTYPE html>
-<html lang="en">
+<!DOCTYPE html><html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta
-        name="viewport"
-        content="width=device-width, initial-scale=1.0, viewport-fit=cover"
+    <meta charset="UTF-8"><meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0, viewport-fit=cover"
+>
+
+<meta
+    name="theme-color"
+    content="#0b0f19"
+>
+
+<title>Krishti AI</title>
+
+<link rel="stylesheet" href="style.css">
+
+</head><body><div class="app"><!-- ==============================
+     SIDEBAR
+=============================== -->
+
+<aside class="sidebar">
+
+    <div class="logo">
+        🤖 <span>Krishti AI</span>
+    </div>
+
+    <button
+        class="new-chat"
+        id="newChat"
+        type="button"
     >
+        + New Chat
+    </button>
 
-    <meta
-        name="theme-color"
-        content="#0b0f19"
-    >
+    <div class="menu">
 
-    <title>Krishti AI</title>
+        <div class="menu-item">
+            💬 <span>Chats</span>
+        </div>
 
-    <link rel="stylesheet" href="style.css">
-</head>
+        <div class="menu-item">
+            💻 <span>Developer</span>
+        </div>
 
-<body>
+        <div class="menu-item" id="documentsMenu">
+            📄 <span>Documents</span>
+        </div>
 
-<div class="app">
+        <div class="menu-item" id="imagesMenu">
+            🖼️ <span>Images</span>
+        </div>
+
+        <div class="menu-item">
+            🌐 <span>Web Search</span>
+        </div>
+
+    </div>
+
+    <div class="sidebar-bottom">
+        ⚙️ Settings
+    </div>
+
+</aside>
+
+
+<!-- ==============================
+     MAIN CHAT
+=============================== -->
+
+<main class="chat-area">
+
+    <!-- Topbar -->
+
+    <header class="topbar">
+
+        <div class="topbar-title">
+
+            <h2>Krishti AI</h2>
+
+            <span>
+                AI Assistant
+            </span>
+
+        </div>
+
+        <div class="online-status">
+
+            <span class="status-dot"></span>
+
+            Online
+
+        </div>
+
+    </header>
+
 
     <!-- ==============================
-         SIDEBAR
+         WELCOME
     =============================== -->
 
-    <aside class="sidebar">
+    <section class="welcome">
 
-        <div class="logo">
-            🤖 <span>Krishti AI</span>
+        <div class="robot">
+            🤖
         </div>
+
+        <h1>
+            Hello! I'm Krishti AI
+        </h1>
+
+        <p>
+            Your intelligent AI assistant
+        </p>
+
+
+        <div class="quick-actions">
+
+            <button
+                type="button"
+                data-prompt="Write a professional JavaScript code example for me."
+            >
+                💻 Write Code
+            </button>
+
+
+            <button
+                type="button"
+                data-prompt="Explain how to analyse and understand a document."
+            >
+                📄 Analyse Document
+            </button>
+
+
+            <button
+                type="button"
+                data-prompt="Help me find information about a topic and explain what I should search for."
+            >
+                🌐 Search Web
+            </button>
+
+
+            <button
+                type="button"
+                data-prompt="Give me some useful and creative ideas."
+            >
+                💡 Get Ideas
+            </button>
+
+        </div>
+
+    </section>
+
+
+    <!-- ==============================
+         DOCUMENT UPLOAD AREA
+    =============================== -->
+
+    <div
+        id="documentUploadArea"
+        style="
+            display:none;
+            margin:15px auto;
+            max-width:700px;
+            padding:18px;
+            border:1px dashed #444;
+            border-radius:14px;
+            text-align:center;
+            background:#111725;
+        "
+    >
+
+        <div style="font-size:32px;">
+            📄
+        </div>
+
+        <h3>
+            Upload a Document
+        </h3>
+
+        <p style="opacity:.7;">
+            PDF, TXT, DOC and other supported files
+        </p>
+
+        <input
+            type="file"
+            id="documentInput"
+            accept=".pdf,.txt,.doc,.docx"
+            hidden
+        >
 
         <button
-            class="new-chat"
             type="button"
+            id="chooseDocument"
+            style="
+                margin-top:10px;
+                padding:10px 18px;
+                border:0;
+                border-radius:10px;
+                cursor:pointer;
+            "
         >
-            + New Chat
+            📎 Choose Document
         </button>
 
-        <div class="menu">
+        <div
+            id="selectedDocument"
+            style="
+                margin-top:12px;
+                font-size:14px;
+            "
+        ></div>
 
-            <div class="menu-item">
-                💬 <span>Chats</span>
-            </div>
-
-            <div class="menu-item">
-                💻 <span>Developer</span>
-            </div>
-
-            <div class="menu-item">
-                📄 <span>Documents</span>
-            </div>
-
-            <div class="menu-item">
-                🖼️ <span>Images</span>
-            </div>
-
-            <div class="menu-item">
-                🌐 <span>Web Search</span>
-            </div>
-
-        </div>
-
-        <div class="sidebar-bottom">
-            ⚙️ Settings
-        </div>
-
-    </aside>
+    </div>
 
 
     <!-- ==============================
-         MAIN CHAT
+         CHAT MESSAGES
     =============================== -->
 
-    <main class="chat-area">
-
-        <!-- Topbar -->
-
-        <header class="topbar">
-
-            <div class="topbar-title">
-                <h2>Krishti AI</h2>
-
-                <span>
-                    AI Assistant
-                </span>
-            </div>
-
-            <div class="online-status">
-                <span class="status-dot"></span>
-                Online
-            </div>
-
-        </header>
+    <section
+        class="messages"
+        aria-live="polite"
+    ></section>
 
 
-        <!-- ==============================
-             WELCOME
-        =============================== -->
+    <!-- ==============================
+         INPUT
+    =============================== -->
 
-        <section class="welcome">
+    <form
+        class="input-area"
+        autocomplete="off"
+        id="chatForm"
+    >
 
-            <div class="robot">
-                🤖
-            </div>
+        <!-- Document button -->
 
-            <h1>
-                Hello! I'm Krishti AI
-            </h1>
-
-            <p>
-                Your intelligent AI assistant
-            </p>
-
-            <div class="quick-actions">
-
-                <button
-                    type="button"
-                    data-prompt="Write a professional JavaScript code example for me."
-                >
-                    💻 Write Code
-                </button>
-
-                <button
-                    type="button"
-                    data-prompt="Explain how to analyse and understand a document."
-                >
-                    📄 Analyse Document
-                </button>
-
-                <button
-                    type="button"
-                    data-prompt="Help me find information about a topic and explain what I should search for."
-                >
-                    🌐 Search Web
-                </button>
-
-                <button
-                    type="button"
-                    data-prompt="Give me some useful and creative ideas."
-                >
-                    💡 Get Ideas
-                </button>
-
-            </div>
-
-        </section>
+        <button
+            class="attach"
+            id="attachButton"
+            type="button"
+            aria-label="Attach document"
+            title="Attach document"
+        >
+            📎
+        </button>
 
 
-        <!-- ==============================
-             CHAT MESSAGES
-        =============================== -->
-
-        <section
-            class="messages"
-            aria-live="polite"
-        ></section>
-
-
-        <!-- ==============================
-             INPUT
-        =============================== -->
-
-        <form
-            class="input-area"
-            autocomplete="off"
+        <input
+            type="text"
+            id="userInput"
+            placeholder="Ask Krishti AI anything..."
+            aria-label="Message"
+            maxlength="10000"
         >
 
-            <input
-                type="text"
-                placeholder="Ask Krishti AI anything..."
-                aria-label="Message"
-                maxlength="10000"
-            >
 
-            <button
-                class="voice"
-                type="button"
-                aria-label="Voice input"
-                title="Voice input"
-            >
-                🎤
-            </button>
+        <button
+            class="voice"
+            id="voiceButton"
+            type="button"
+            aria-label="Voice input"
+            title="Voice input"
+        >
+            🎤
+        </button>
 
-            <button
-                class="send"
-                type="submit"
-                aria-label="Send message"
-                title="Send message"
-            >
-                ➤
-            </button>
 
-        </form>
+        <button
+            class="send"
+            id="sendButton"
+            type="submit"
+            aria-label="Send message"
+            title="Send message"
+        >
+            ➤
+        </button>
 
-    </main>
+    </form>
 
-</div>
+</main>
 
-<script src="script.js"></script>
-
-</body>
+</div><script src="script.js"></script></body>
 </html>
