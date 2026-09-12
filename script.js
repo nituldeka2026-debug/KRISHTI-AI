@@ -220,16 +220,27 @@ async function sendMessage(customMessage = null) {
                 {
                     method: "POST",
 
-                    headers: {
-                        "Content-Type":
-                            "application/json"
-                    },
+                    ...(selectedFile
+                        ? {}
+                        : {
+                            headers: {
+                                "Content-Type":
+                                    "application/json"
+                            }
+                        }),
 
-                    body:
-                        JSON.stringify({
-                            message:
-                                message
-                        })
+                    body: (() => {
+                        if (!selectedFile) {
+                            return JSON.stringify({
+                                message: message
+                            });
+                        }
+
+                        const formData = new FormData();
+                        formData.append("message", message);
+                        formData.append("file", selectedFile);
+                        return formData;
+                    })()
                 }
             );
 
@@ -349,6 +360,10 @@ async function sendMessage(customMessage = null) {
 
             aiBubble.textContent =
                 "Sorry, I couldn't generate a response.";
+        }
+
+        if (selectedFile) {
+            removeSelectedDocument();
         }
 
 
