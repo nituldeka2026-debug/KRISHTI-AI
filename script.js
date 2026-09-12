@@ -1,89 +1,177 @@
-/* =========================================================
-   KRISHTI AI — FRONTEND
-   Chat + Streaming + Mobile + Voice
-   ========================================================= */
+// =========================================================
+// KRISHTI AI V2 — FRONTEND SCRIPT
+// =========================================================
 
-const input = document.querySelector(".input-area input");
-const inputForm = document.querySelector(".input-area");
-const sendButton = document.querySelector(".send");
-const voiceButton = document.querySelector(".voice");
+const chatForm = document.getElementById("chatForm");
+const userInput = document.getElementById("userInput");
+const sendButton = document.getElementById("sendButton");
+const voiceButton = document.getElementById("voiceButton");
 
-const chatArea = document.querySelector(".chat-area");
-const welcome = document.querySelector(".welcome");
-const messagesContainer = document.querySelector(".messages");
+const messagesContainer =
+    document.querySelector(".messages");
 
-const newChatButton = document.querySelector(".new-chat");
+const welcomeSection =
+    document.querySelector(".welcome");
+
+const newChatButton =
+    document.getElementById("newChat");
+
 const quickButtons =
-    document.querySelectorAll(".quick-actions button");
-
+    document.querySelectorAll("[data-prompt]");
 
 let isSending = false;
 
 
-/* =========================================================
-   SEND MESSAGE
-========================================================= */
+// =========================================================
+// ADD MESSAGE
+// =========================================================
+
+function addMessage(text, sender) {
+
+    const messageDiv =
+        document.createElement("div");
+
+    messageDiv.className =
+        `message ${sender}`;
+
+    const bubble =
+        document.createElement("div");
+
+    bubble.className =
+        "message-bubble";
+
+    bubble.textContent =
+        text;
+
+    messageDiv.appendChild(bubble);
+
+    messagesContainer.appendChild(
+        messageDiv
+    );
+
+    scrollToBottom();
+
+    return bubble;
+}
+
+
+// =========================================================
+// SCROLL
+// =========================================================
+
+function scrollToBottom() {
+
+    messagesContainer.scrollTop =
+        messagesContainer.scrollHeight;
+}
+
+
+// =========================================================
+// TYPING INDICATOR
+// =========================================================
+
+function showTyping() {
+
+    const typing =
+        document.createElement("div");
+
+    typing.className =
+        "message ai typing-message";
+
+    typing.innerHTML = `
+        <div class="message-bubble typing">
+            <span></span>
+            <span></span>
+            <span></span>
+        </div>
+    `;
+
+    messagesContainer.appendChild(
+        typing
+    );
+
+    scrollToBottom();
+
+    return typing;
+}
+
+
+// =========================================================
+// SENDING STATE
+// =========================================================
+
+function setSendingState(state) {
+
+    isSending = state;
+
+    if (sendButton) {
+
+        sendButton.disabled =
+            state;
+    }
+
+    if (userInput) {
+
+        userInput.disabled =
+            state;
+    }
+
+    if (voiceButton) {
+
+        voiceButton.disabled =
+            state;
+    }
+}
+
+
+// =========================================================
+// SEND MESSAGE
+// =========================================================
 
 async function sendMessage(customMessage = null) {
 
-    if (isSending) return;
+    if (isSending) {
+        return;
+    }
 
     const message =
         customMessage !== null
             ? customMessage.trim()
-            : input.value.trim();
+            : userInput.value.trim();
 
-    if (!message) return;
-
-
-    isSending = true;
-
-    setSendingState(true);
-
-
-    /* Hide welcome */
-
-    if (welcome) {
-        welcome.style.display = "none";
+    if (!message) {
+        return;
     }
 
 
-    /* Add user message */
+    // Hide welcome screen
+    if (welcomeSection) {
 
+        welcomeSection.style.display =
+            "none";
+    }
+
+
+    // Add user message
     addMessage(
-        "You",
         message,
         "user"
     );
 
 
-    /* Clear input */
+    // Clear input
+    if (userInput) {
 
-    input.value = "";
-
-
-    /* Create AI message */
-
-    const aiMessage =
-        addMessage(
-            "🤖 Krishti AI",
-            "",
-            "ai"
-        );
-
-    const aiText =
-        aiMessage.querySelector("p");
+        userInput.value = "";
+    }
 
 
-    /* Typing indicator */
+    // Show typing
+    const typing =
+        showTyping();
 
-    aiText.innerHTML = `
-        <span class="typing">
-            <span></span>
-            <span></span>
-            <span></span>
-        </span>
-    `;
+
+    setSendingState(true);
 
 
     try {
@@ -106,75 +194,78 @@ async function sendMessage(customMessage = null) {
             );
 
 
-        /* =========================================
-           SERVER ERROR
-        ========================================= */
+        // Remove typing
+        if (typing) {
 
+            typing.remove();
+        }
+
+
+        // Server error
         if (!response.ok) {
 
             let errorText =
-                `Server error (${response.status})`;
+                await response.text();
 
-            try {
+            if (!errorText) {
 
-                const text =
-                    await response.text();
-
-                if (text.trim()) {
-                    errorText = text.trim();
-                }
-
-            } catch (_) {
-                // Ignore body read error
+                errorText =
+                    "Something went wrong.";
             }
 
-            throw new Error(errorText);
+            addMessage(
+                errorText,
+                "ai"
+            );
+
+            return;
         }
 
 
-        /* =========================================
-           STREAM CHECK
-        ========================================= */
+        // Create AI message
+        const aiBubble =
+            addMessage(
+                "",
+                "ai"
+            );
 
+
+        // Check streaming
         if (!response.body) {
 
-            throw new Error(
-                "No streaming response received from server."
-            );
+            const text =
+                await response.text();
+
+            aiBubble.textContent =
+                text;
+
+            return;
         }
 
 
+        // Read stream
         const reader =
             response.body.getReader();
 
         const decoder =
-            new TextDecoder("utf-8");
-
+            new TextDecoder(
+                "utf-8"
+            );
 
         let fullText = "";
 
-        let firstChunk = true;
-
-
-        /* =========================================
-           READ STREAM
-        ========================================= */
 
         while (true) {
 
             const {
                 value,
                 done
-            } = await reader.read();
+            } =
+                await reader.read();
 
 
             if (done) {
                 break;
-            }
-
-
-            if (!value) {
-                continue;
             }
 
 
@@ -187,18 +278,11 @@ async function sendMessage(customMessage = null) {
                 );
 
 
-            if (firstChunk) {
-
-                aiText.textContent = "";
-
-                firstChunk = false;
-            }
+            fullText +=
+                chunk;
 
 
-            fullText += chunk;
-
-
-            aiText.textContent =
+            aiBubble.textContent =
                 fullText;
 
 
@@ -206,240 +290,68 @@ async function sendMessage(customMessage = null) {
         }
 
 
-        /* Flush decoder */
-
+        // Flush decoder
         const finalChunk =
             decoder.decode();
 
 
         if (finalChunk) {
 
-            fullText += finalChunk;
+            fullText +=
+                finalChunk;
 
-            aiText.textContent =
+            aiBubble.textContent =
                 fullText;
         }
 
 
-        /* =========================================
-           EMPTY RESPONSE
-        ========================================= */
-
         if (!fullText.trim()) {
 
-            aiText.textContent =
-                "No response received from Krishti AI.";
+            aiBubble.textContent =
+                "Sorry, I couldn't generate a response.";
         }
 
 
     } catch (error) {
 
         console.error(
-            "Krishti AI Error:",
+            "Chat error:",
             error
         );
 
 
-        aiMessage.classList.add("error");
+        if (typing) {
 
+            typing.remove();
+        }
 
-        aiText.textContent =
-            getFriendlyErrorMessage(error);
-    }
 
-
-    setSendingState(false);
-
-    isSending = false;
-
-    scrollToBottom();
-}
-
-
-/* =========================================================
-   ADD MESSAGE
-========================================================= */
-
-function addMessage(
-    sender,
-    message,
-    type = "ai"
-) {
-
-    const messageBox =
-        document.createElement("div");
-
-    messageBox.className =
-        `message ${type}`;
-
-
-    const content =
-        document.createElement("div");
-
-    content.className =
-        "message-content";
-
-
-    const senderElement =
-        document.createElement("strong");
-
-    senderElement.textContent =
-        sender;
-
-
-    const textElement =
-        document.createElement("p");
-
-    textElement.textContent =
-        message;
-
-
-    content.appendChild(
-        senderElement
-    );
-
-    content.appendChild(
-        textElement
-    );
-
-
-    messageBox.appendChild(
-        content
-    );
-
-
-    messagesContainer.appendChild(
-        messageBox
-    );
-
-
-    scrollToBottom();
-
-
-    return messageBox;
-}
-
-
-/* =========================================================
-   ERROR MESSAGE
-========================================================= */
-
-function getFriendlyErrorMessage(error) {
-
-    const message =
-        error && error.message
-            ? error.message
-            : "";
-
-
-    if (
-        message.includes("Failed to fetch") ||
-        message.includes("NetworkError")
-    ) {
-
-        return (
-            "Krishti AI server connection failed. " +
-            "Please check the server and try again."
-        );
-    }
-
-
-    if (
-        message.includes("Gemini API key") ||
-        message.includes("API key")
-    ) {
-
-        return (
-            "Gemini API key is not configured correctly on the server."
-        );
-    }
-
-
-    if (
-        message.includes("429") ||
-        message.toLowerCase().includes("limit")
-    ) {
-
-        return (
-            "AI request limit reached. Please try again later."
-        );
-    }
-
-
-    return (
-        message ||
-        "Krishti AI could not process your request."
-    );
-}
-
-
-/* =========================================================
-   SCROLL
-========================================================= */
-
-function scrollToBottom() {
-
-    if (!messagesContainer) {
-        return;
-    }
-
-
-    requestAnimationFrame(() => {
-
-        messagesContainer.scrollTop =
-            messagesContainer.scrollHeight;
-
-    });
-}
-
-
-/* =========================================================
-   SEND STATE
-========================================================= */
-
-function setSendingState(sending) {
-
-    if (!sendButton) {
-        return;
-    }
-
-
-    sendButton.disabled =
-        sending;
-
-
-    if (sending) {
-
-        sendButton.textContent =
-            "…";
-
-        sendButton.setAttribute(
-            "aria-label",
-            "Sending"
+        addMessage(
+            "Connection error. Please check your internet connection and try again.",
+            "ai"
         );
 
-    } else {
+    } finally {
 
-        sendButton.textContent =
-            "➤";
+        setSendingState(false);
 
-        sendButton.setAttribute(
-            "aria-label",
-            "Send message"
-        );
+        if (userInput) {
+
+            userInput.focus();
+        }
     }
 }
 
 
-/* =========================================================
-   FORM SUBMIT
-========================================================= */
+// =========================================================
+// FORM SUBMIT
+// =========================================================
 
-if (inputForm) {
+if (chatForm) {
 
-    inputForm.addEventListener(
+    chatForm.addEventListener(
         "submit",
-        function (event) {
+        event => {
 
             event.preventDefault();
 
@@ -449,15 +361,15 @@ if (inputForm) {
 }
 
 
-/* =========================================================
-   ENTER KEY
-========================================================= */
+// =========================================================
+// ENTER KEY
+// =========================================================
 
-if (input) {
+if (userInput) {
 
-    input.addEventListener(
+    userInput.addEventListener(
         "keydown",
-        function (event) {
+        event => {
 
             if (
                 event.key === "Enter" &&
@@ -468,36 +380,28 @@ if (input) {
 
                 sendMessage();
             }
-
         }
     );
 }
 
 
-/* =========================================================
-   QUICK ACTIONS
-========================================================= */
+// =========================================================
+// QUICK ACTIONS
+// =========================================================
 
 quickButtons.forEach(
     button => {
 
         button.addEventListener(
             "click",
-            function () {
+            () => {
 
                 const prompt =
-                    button.dataset.prompt ||
-                    button.textContent.trim();
+                    button.dataset.prompt;
 
-
-                if (input) {
-
-                    input.value =
-                        prompt;
-
-                    input.focus();
+                if (!prompt) {
+                    return;
                 }
-
 
                 sendMessage(
                     prompt
@@ -508,174 +412,210 @@ quickButtons.forEach(
 );
 
 
-/* =========================================================
-   NEW CHAT
-========================================================= */
+// =========================================================
+// NEW CHAT
+// =========================================================
 
 if (newChatButton) {
 
     newChatButton.addEventListener(
         "click",
-        function () {
+        () => {
+
+            if (isSending) {
+                return;
+            }
+
 
             messagesContainer.innerHTML =
                 "";
 
 
-            if (welcome) {
+            if (welcomeSection) {
 
-                welcome.style.display =
+                welcomeSection.style.display =
                     "";
             }
 
 
-            if (input) {
+            if (userInput) {
 
-                input.value = "";
+                userInput.value = "";
 
-                input.focus();
+                userInput.focus();
             }
-
-
-            isSending = false;
-
-            setSendingState(false);
-
-            scrollToBottom();
         }
     );
 }
 
 
-/* =========================================================
-   VOICE INPUT
-========================================================= */
+// =========================================================
+// VOICE INPUT
+// =========================================================
 
-if (voiceButton) {
-
-    const SpeechRecognition =
-        window.SpeechRecognition ||
-        window.webkitSpeechRecognition;
+const SpeechRecognition =
+    window.SpeechRecognition ||
+    window.webkitSpeechRecognition;
 
 
-    if (!SpeechRecognition) {
+if (
+    voiceButton &&
+    SpeechRecognition
+) {
 
-        voiceButton.addEventListener(
-            "click",
-            function () {
+    const recognition =
+        new SpeechRecognition();
 
-                alert(
-                    "Voice input is not supported by this browser."
+
+    recognition.continuous =
+        false;
+
+    recognition.interimResults =
+        false;
+
+    recognition.lang =
+        navigator.language || "en-US";
+
+
+    voiceButton.addEventListener(
+        "click",
+        () => {
+
+            if (isSending) {
+                return;
+            }
+
+            try {
+
+                recognition.start();
+
+            } catch (error) {
+
+                console.log(
+                    "Voice already running."
                 );
             }
-        );
-
-    } else {
-
-        const recognition =
-            new SpeechRecognition();
+        }
+    );
 
 
-        recognition.lang =
-            navigator.language || "en-IN";
+    recognition.onresult =
+        event => {
+
+            const transcript =
+                event.results[0][0].transcript;
 
 
-        recognition.continuous =
-            false;
+            userInput.value =
+                transcript;
 
 
-        recognition.interimResults =
-            false;
+            userInput.focus();
+        };
 
 
-        recognition.maxAlternatives =
-            1;
+    recognition.onerror =
+        error => {
+
+            console.error(
+                "Voice error:",
+                error.error
+            );
+        };
+}
 
 
-        let listening = false;
+else if (voiceButton) {
+
+    voiceButton.addEventListener(
+        "click",
+        () => {
+
+            alert(
+                "Voice input is not supported by this browser."
+            );
+        }
+    );
+}
 
 
-        recognition.onstart =
-            function () {
+// =========================================================
+// SIDEBAR MENU
+// =========================================================
 
-                listening = true;
-
-                voiceButton.textContent =
-                    "🔴";
-            };
-
-
-        recognition.onresult =
-            function (event) {
-
-                const result =
-                    event.results[0][0].transcript;
+const sidebarItems =
+    document.querySelectorAll(
+        ".sidebar div"
+    );
 
 
-                if (input) {
+sidebarItems.forEach(
+    item => {
 
-                    input.value =
-                        result;
-
-                    input.focus();
-                }
-            };
-
-
-        recognition.onerror =
-            function (event) {
-
-                console.error(
-                    "Voice recognition error:",
-                    event.error
-                );
-            };
-
-
-        recognition.onend =
-            function () {
-
-                listening = false;
-
-                voiceButton.textContent =
-                    "🎤";
-            };
-
-
-        voiceButton.addEventListener(
+        item.addEventListener(
             "click",
-            function () {
+            () => {
 
-                if (listening) {
+                const text =
+                    item.textContent
+                        .trim()
+                        .toLowerCase();
 
-                    recognition.stop();
 
-                    return;
+                if (
+                    text.includes("developer")
+                ) {
+
+                    sendMessage(
+                        "I want to learn programming and coding. Help me with code step by step."
+                    );
+
                 }
 
+                else if (
+                    text.includes("documents")
+                ) {
 
-                try {
+                    addMessage(
+                        "📄 Document upload feature is coming in the next V2 step.",
+                        "ai"
+                    );
+                }
 
-                    recognition.start();
+                else if (
+                    text.includes("images")
+                ) {
 
-                } catch (error) {
+                    addMessage(
+                        "🖼️ Image analysis feature is coming in the next V2 step.",
+                        "ai"
+                    );
+                }
 
-                    console.error(
-                        "Voice start error:",
-                        error
+                else if (
+                    text.includes("web search")
+                ) {
+
+                    sendMessage(
+                        "I want to search the web. Explain what I should search for."
                     );
                 }
             }
         );
     }
+);
+
+
+// =========================================================
+// STARTUP
+// =========================================================
+
+if (userInput) {
+
+    userInput.focus();
 }
 
 
-/* =========================================================
-   INITIAL FOCUS
-========================================================= */
-
-if (input) {
-
-    input.focus();
-}
+console.log(
+    "Krishti AI V2 frontend loaded successfully."
+);
