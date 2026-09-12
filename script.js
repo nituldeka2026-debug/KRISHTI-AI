@@ -220,27 +220,20 @@ async function sendMessage(customMessage = null) {
                 {
                     method: "POST",
 
-                    ...(selectedFile
-                        ? {}
-                        : {
-                            headers: {
-                                "Content-Type":
-                                    "application/json"
-                            }
-                        }),
+                    headers: {
+                        "Content-Type":
+                            "application/json"
+                    },
 
-                    body: (() => {
-                        if (!selectedFile) {
-                            return JSON.stringify({
-                                message: message
-                            });
-                        }
-
-                        const formData = new FormData();
-                        formData.append("message", message);
-                        formData.append("file", selectedFile);
-                        return formData;
-                    })()
+                    body:
+                        JSON.stringify({
+                            message:
+                                message,
+                            document:
+                                selectedFile
+                                    ? await fileToGeminiPayload(selectedFile)
+                                    : null
+                        })
                 }
             );
 
@@ -362,10 +355,6 @@ async function sendMessage(customMessage = null) {
                 "Sorry, I couldn't generate a response.";
         }
 
-        if (selectedFile) {
-            removeSelectedDocument();
-        }
-
 
     } catch (error) {
 
@@ -436,6 +425,44 @@ if (userInput) {
             }
         }
     );
+}
+
+
+
+
+// =========================================================
+// CONVERT SELECTED FILE FOR GEMINI
+// =========================================================
+
+function fileToGeminiPayload(file) {
+
+    return new Promise((resolve, reject) => {
+
+        if (!file) {
+            resolve(null);
+            return;
+        }
+
+        const reader = new FileReader();
+
+        reader.onload = () => {
+            try {
+                const result = String(reader.result || "");
+                const comma = result.indexOf(",");
+
+                resolve({
+                    name: file.name,
+                    mimeType: file.type || "application/pdf",
+                    data: comma >= 0 ? result.slice(comma + 1) : result
+                });
+            } catch (error) {
+                reject(error);
+            }
+        };
+
+        reader.onerror = () => reject(reader.error || new Error("Could not read document."));
+        reader.readAsDataURL(file);
+    });
 }
 
 

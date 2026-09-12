@@ -32,7 +32,8 @@ const GEMINI_API_KEY =
  * Current Gemini model.
  */
 const GEMINI_MODEL =
-    "gemini-3.8-flash";
+    process.env.GEMINI_MODEL ||
+    "gemini-2.5-flash";
 
 
 /* =========================================================
@@ -43,10 +44,7 @@ const MAX_MESSAGE_LENGTH =
     10000;
 
 const MAX_BODY_SIZE =
-    12 * 1024 * 1024;
-
-const MAX_PDF_SIZE =
-    10 * 1024 * 1024;
+    15 * 1024 * 1024;
 
 
 /* =========================================================
@@ -173,97 +171,77 @@ function readRequestBody(req) {
     return new Promise(
         (resolve, reject) => {
 
-            const chunks = [];
+            let body = "";
+
             let size = 0;
+
             let finished = false;
 
-            req.on("data", chunk => {
-                if (finished) return;
 
-                size += chunk.length;
+            req.on(
+                "data",
+                chunk => {
 
-                if (size > MAX_BODY_SIZE) {
-                    finished = true;
-                    reject(new Error("Request body too large."));
-                    req.destroy();
-                    return;
+                    if (finished) {
+                        return;
+                    }
+
+                    size +=
+                        Buffer.byteLength(chunk);
+
+
+                    if (
+                        size >
+                        MAX_BODY_SIZE
+                    ) {
+
+                        finished = true;
+
+                        reject(
+                            new Error(
+                                "Request body too large."
+                            )
+                        );
+
+                        req.destroy();
+
+                        return;
+                    }
+
+
+                    body += chunk;
                 }
+            );
 
-                chunks.push(chunk);
-            });
 
-            req.on("end", () => {
-                if (!finished) resolve(Buffer.concat(chunks));
-            });
+            req.on(
+                "end",
+                () => {
 
-            req.on("error", error => {
-                if (!finished) {
-                    finished = true;
-                    reject(error);
+                    if (!finished) {
+
+                        finished = true;
+
+                        resolve(body);
+                    }
                 }
-            });
+            );
+
+
+            req.on(
+                "error",
+                error => {
+
+                    if (!finished) {
+
+                        finished = true;
+
+                        reject(error);
+                    }
+                }
+            );
         }
     );
-}
-
-
-/* =========================================================
-   MULTIPART FORM PARSER — PDF + MESSAGE
-========================================================= */
-
-function parseMultipart(buffer, contentType) {
-
-    const match = contentType.match(/boundary=(?:\"([^\"]+)\"|([^;]+))/i);
-
-    if (!match) {
-        throw new Error("Multipart boundary is missing.");
-    }
-
-    const boundary = Buffer.from("--" + (match[1] || match[2]).trim());
-    const parts = [];
-    let cursor = 0;
-
-    while (true) {
-        const start = buffer.indexOf(boundary, cursor);
-        if (start === -1) break;
-
-        const partStart = start + boundary.length;
-        if (buffer.slice(partStart, partStart + 2).toString() === "--") break;
-
-        let contentStart = partStart;
-        if (buffer.slice(contentStart, contentStart + 2).toString() === "\r\n") {
-            contentStart += 2;
-        }
-
-        const headerEnd = buffer.indexOf(Buffer.from("\r\n\r\n"), contentStart);
-        if (headerEnd === -1) break;
-
-        const headerText = buffer.slice(contentStart, headerEnd).toString("utf8");
-        const dataStart = headerEnd + 4;
-        const nextBoundary = buffer.indexOf(boundary, dataStart);
-        if (nextBoundary === -1) break;
-
-        let dataEnd = nextBoundary;
-        if (buffer.slice(dataEnd - 2, dataEnd).toString() === "\r\n") {
-            dataEnd -= 2;
-        }
-
-        const disposition = headerText.match(/Content-Disposition:[^\r\n]*name="([^"]+)"(?:[^\r\n]*filename="([^"]*)")?/i);
-        const contentTypeMatch = headerText.match(/Content-Type:\s*([^\r\n]+)/i);
-
-        if (disposition) {
-            parts.push({
-                name: disposition[1],
-                filename: disposition[2] || null,
-                contentType: contentTypeMatch ? contentTypeMatch[1].trim() : "",
-                data: buffer.slice(dataStart, dataEnd)
-            });
-        }
-
-        cursor = nextBoundary;
-    }
-
-    return parts;
 }
 
 
@@ -451,40 +429,25 @@ async function handleChat(
         const body =
             await readRequestBody(req);
 
-        let data = {};
-        let pdfPart = null;
 
-        const contentType =
-            req.headers["content-type"] || "";
+        let data;
 
-        if (contentType.toLowerCase().startsWith("multipart/form-data")) {
-            try {
-                const parts = parseMultipart(body, contentType);
 
-                for (const part of parts) {
-                    if (part.name === "message") {
-                        data.message = part.data.toString("utf8");
-                    }
+        try {
 
-                    if (part.name === "file" && part.filename) {
-                        pdfPart = part;
-                    }
-                }
-            } catch (error) {
-                return sendJSON(res, 400, {
-                    success: false,
-                    error: "Invalid file upload request."
-                });
-            }
-        } else {
-            try {
-                data = JSON.parse(body.toString("utf8"));
-            } catch (error) {
-                return sendJSON(res, 400, {
+            data =
+                JSON.parse(body);
+
+        } catch (error) {
+
+            return sendJSON(
+                res,
+                400,
+                {
                     success: false,
                     error: "Invalid JSON request."
-                });
-            }
+                }
+            );
         }
 
 
@@ -497,8 +460,16 @@ async function handleChat(
                 ? data.message.trim()
                 : "";
 
+        const document =
+            data.document && typeof data.document === "object"
+                ? data.document
+                : null;
 
-        if (!message) {
+        const hasDocument =
+            !!(document && document.data && document.mimeType);
+
+
+        if (!message && !hasDocument) {
 
             return sendJSON(
                 res,
@@ -588,61 +559,21 @@ async function handleChat(
 
 
         /* =========================================
-           PDF VALIDATION
-        ========================================= */
-
-        if (pdfPart) {
-            const isPdf =
-                pdfPart.contentType.toLowerCase() === "application/pdf" ||
-                pdfPart.filename.toLowerCase().endsWith(".pdf");
-
-            if (!isPdf) {
-                return sendJSON(res, 400, {
-                    success: false,
-                    error: "Only PDF files are supported."
-                });
-            }
-
-            if (pdfPart.data.length > MAX_PDF_SIZE) {
-                return sendJSON(res, 400, {
-                    success: false,
-                    error: "PDF is too large. Please use a file smaller than 10 MB."
-                });
-            }
-
-            if (pdfPart.data.length < 4 || pdfPart.data.slice(0, 4).toString() !== "%PDF") {
-                return sendJSON(res, 400, {
-                    success: false,
-                    error: "The selected file does not appear to be a valid PDF."
-                });
-            }
-        }
-
-
-        /* =========================================
            BUILD PROMPT
         ========================================= */
 
-        const prompt =
+        let prompt =
             buildPrompt(
-                message,
+                message || "Please analyze the uploaded document and answer based on it.",
                 conversation
             );
 
-        const geminiContents = pdfPart
-            ? [
-                {
-                    text: message +
-                        "\n\nA PDF document is attached. Answer the user's question using the attached PDF as the primary source. If the answer is not present in the PDF, clearly say so."
-                },
-                {
-                    inlineData: {
-                        mimeType: "application/pdf",
-                        data: pdfPart.data.toString("base64")
-                    }
-                }
-            ]
-            : prompt;
+        if (hasDocument) {
+            prompt +=
+                "\n\nIMPORTANT: A document is attached to this message. " +
+                "Use the attached document as the primary source. " +
+                "Answer the user's question from the document and do not claim that you cannot access uploaded files.";
+        }
 
 
         /* =========================================
@@ -660,8 +591,22 @@ async function handleChat(
                         model:
                             GEMINI_MODEL,
 
-                        contents:
-                            geminiContents
+                        contents: hasDocument
+                            ? [
+                                {
+                                    role: "user",
+                                    parts: [
+                                        { text: prompt },
+                                        {
+                                            inlineData: {
+                                                mimeType: document.mimeType,
+                                                data: document.data
+                                            }
+                                        }
+                                    ]
+                                }
+                            ]
+                            : prompt
                     }
                 );
 
