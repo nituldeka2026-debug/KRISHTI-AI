@@ -1,14 +1,19 @@
-# KRISHTI AI V3
+# Krishti AI V4
 
-Professional Krishti AI base with existing chat/document support and Photo → Another Timeline image transformation.
+Krishti AI now uses a clean ChatGPT-style chat screen. You can attach a photo and simply type what you want, for example:
 
-## Timeline options
-1980s • 1990s • 2000s • 2010s • 2020s • 2050 Future
+- `Make this photo look like it was taken in the 1980s.`
+- `Change the background to a beautiful tea garden.`
+- `Make this look like a cinematic portrait.`
+- `Turn this into a believable 2050 future version.`
 
 ## Run
+
 ```bash
 npm install
 npm start
 ```
 
-Set `GEMINI_API_KEY` in your deployment environment. Optional: `GEMINI_IMAGE_MODEL` (defaults to `gemini-3.1-flash-image`).
+Set `GEMINI_API_KEY` in your environment. Optionally set `GEMINI_IMAGE_MODEL` (default: `gemini-3.1-flash-image`).
+
+The photo editor accepts JPG, PNG and WEBP images up to 10 MB.

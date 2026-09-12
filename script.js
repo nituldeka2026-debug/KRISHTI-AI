@@ -47,6 +47,25 @@ const selectedDocument =
     document.getElementById("selectedDocument");
 
 
+const photoButton =
+    document.getElementById("photoButton");
+
+const imageInput =
+    document.getElementById("imageInput");
+
+const imageAttachment =
+    document.getElementById("imageAttachment");
+
+const imagePreview =
+    document.getElementById("imagePreview");
+
+const imageName =
+    document.getElementById("imageName");
+
+const removeImageButton =
+    document.getElementById("removeImage");
+
+
 // =========================================================
 // STATE
 // =========================================================
@@ -54,6 +73,7 @@ const selectedDocument =
 let isSending = false;
 
 let selectedFile = null;
+let selectedImage = null;
 
 
 // =========================================================
@@ -72,7 +92,7 @@ function addMessage(text, sender) {
         document.createElement("div");
 
     bubble.className =
-        "message-bubble";
+        "message-content";
 
     bubble.textContent =
         text;
@@ -119,7 +139,7 @@ function showTyping() {
         "message ai typing-message";
 
     typing.innerHTML = `
-        <div class="message-bubble typing">
+        <div class="message-content typing">
             <span></span>
             <span></span>
             <span></span>
@@ -159,6 +179,10 @@ function setSendingState(state) {
     if (attachButton) {
         attachButton.disabled = state;
     }
+
+    if (photoButton) {
+        photoButton.disabled = state;
+    }
 }
 
 
@@ -172,217 +196,204 @@ async function sendMessage(customMessage = null) {
         return;
     }
 
-
     const message =
         customMessage !== null
             ? customMessage.trim()
             : userInput.value.trim();
 
+    const hasImage = !!selectedImage;
+    const hasDocument = !!selectedFile;
 
-    if (!message) {
+    if (!message && !hasImage && !hasDocument) {
         return;
     }
 
-
-    // Hide welcome
     if (welcomeSection) {
-        welcomeSection.style.display =
-            "none";
+        welcomeSection.style.display = "none";
     }
 
+    // Image + prompt uses the image editing endpoint.
+    if (hasImage) {
+        const image = selectedImage;
+        const prompt = message || "Edit this photo naturally and realistically.";
 
-    // Add user message
-    addMessage(
-        message,
-        "user"
-    );
+        addImageUserMessage(prompt, image);
+        if (userInput) userInput.value = "";
+        autoResizeInput();
+        removeSelectedImage();
 
+        const typing = showTyping();
+        setSendingState(true);
 
-    // Clear input
+        try {
+            const payload = await fileToGeminiPayload(image);
+            const response = await fetch("/api/image-edit", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    prompt,
+                    image: payload.data,
+                    mimeType: payload.mimeType
+                })
+            });
+
+            if (typing) typing.remove();
+
+            let data = null;
+            try { data = await response.json(); } catch (_) {}
+
+            if (!response.ok || !data || !data.success) {
+                addMessage(
+                    (data && data.error) || "The image could not be generated. Please try again.",
+                    "ai"
+                );
+                return;
+            }
+
+            addImageMessage(data.image, data.mimeType || "image/png");
+
+        } catch (error) {
+            console.error("Image edit error:", error);
+            if (typing) typing.remove();
+            addMessage(
+                "Connection error while generating the image. Please try again.",
+                "ai"
+            );
+        } finally {
+            setSendingState(false);
+            if (userInput) userInput.focus();
+        }
+
+        return;
+    }
+
+    // Normal chat / document chat.
+    addMessage(message || "Please analyze the uploaded document.", "user");
+
     if (userInput) {
         userInput.value = "";
+        autoResizeInput();
     }
 
-
-    // Show typing
-    const typing =
-        showTyping();
-
-
+    const typing = showTyping();
     setSendingState(true);
 
-
     try {
+        const response = await fetch("/api/chat", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                message: message,
+                document: selectedFile
+                    ? await fileToGeminiPayload(selectedFile)
+                    : null
+            })
+        });
 
-        const response =
-            await fetch(
-                "/api/chat",
-                {
-                    method: "POST",
+        if (typing) typing.remove();
 
-                    headers: {
-                        "Content-Type":
-                            "application/json"
-                    },
-
-                    body:
-                        JSON.stringify({
-                            message:
-                                message,
-                            document:
-                                selectedFile
-                                    ? await fileToGeminiPayload(selectedFile)
-                                    : null
-                        })
-                }
-            );
-
-
-        // Remove typing
-        if (typing) {
-            typing.remove();
-        }
-
-
-        // Server error
         if (!response.ok) {
-
-            let errorText =
-                await response.text();
-
-
-            if (!errorText) {
-                errorText =
-                    "Something went wrong.";
-            }
-
-
-            addMessage(
-                errorText,
-                "ai"
-            );
-
+            let errorText = await response.text();
+            if (!errorText) errorText = "Something went wrong.";
+            addMessage(errorText, "ai");
             return;
         }
 
+        const aiBubble = addMessage("", "ai");
 
-        // AI message
-        const aiBubble =
-            addMessage(
-                "",
-                "ai"
-            );
-
-
-        // No streaming body
         if (!response.body) {
-
-            const text =
-                await response.text();
-
-            aiBubble.textContent =
-                text;
-
+            aiBubble.textContent = await response.text();
             return;
         }
 
-
-        // Read stream
-        const reader =
-            response.body.getReader();
-
-        const decoder =
-            new TextDecoder(
-                "utf-8"
-            );
-
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder("utf-8");
         let fullText = "";
 
-
         while (true) {
-
-            const {
-                value,
-                done
-            } =
-                await reader.read();
-
-
-            if (done) {
-                break;
-            }
-
-
-            const chunk =
-                decoder.decode(
-                    value,
-                    {
-                        stream: true
-                    }
-                );
-
-
-            fullText +=
-                chunk;
-
-
-            aiBubble.textContent =
-                fullText;
-
-
+            const { value, done } = await reader.read();
+            if (done) break;
+            fullText += decoder.decode(value, { stream: true });
+            aiBubble.textContent = fullText;
             scrollToBottom();
         }
 
-
-        // Flush decoder
-        const finalChunk =
-            decoder.decode();
-
-
-        if (finalChunk) {
-
-            fullText +=
-                finalChunk;
-
-            aiBubble.textContent =
-                fullText;
-        }
-
-
-        if (!fullText.trim()) {
-
-            aiBubble.textContent =
-                "Sorry, I couldn't generate a response.";
-        }
-
+        fullText += decoder.decode();
+        aiBubble.textContent = fullText || "Sorry, I couldn't generate a response.";
 
     } catch (error) {
-
-        console.error(
-            "Chat error:",
-            error
-        );
-
-
-        if (typing) {
-            typing.remove();
-        }
-
-
+        console.error("Chat error:", error);
+        if (typing) typing.remove();
         addMessage(
             "Connection error. Please check your internet connection and try again.",
             "ai"
         );
-
     } finally {
-
         setSendingState(false);
-
-
-        if (userInput) {
-            userInput.focus();
-        }
+        removeSelectedDocument();
+        if (userInput) userInput.focus();
     }
+}
+
+
+function addImageUserMessage(text, file) {
+    const messageDiv = document.createElement("div");
+    messageDiv.className = "message user";
+
+    const bubble = document.createElement("div");
+    bubble.className = "message-content image-message";
+
+    const img = document.createElement("img");
+    img.className = "message-image";
+    img.src = URL.createObjectURL(file);
+    img.alt = "Uploaded photo";
+
+    const caption = document.createElement("div");
+    caption.className = "image-message-caption";
+    caption.textContent = text;
+
+    bubble.appendChild(img);
+    bubble.appendChild(caption);
+    messageDiv.appendChild(bubble);
+    messagesContainer.appendChild(messageDiv);
+    scrollToBottom();
+}
+
+
+function addImageMessage(base64, mimeType) {
+    const messageDiv = document.createElement("div");
+    messageDiv.className = "message ai";
+
+    const bubble = document.createElement("div");
+    bubble.className = "message-content image-result";
+
+    const img = document.createElement("img");
+    img.className = "generated-image";
+    img.src = `data:${mimeType};base64,${base64}`;
+    img.alt = "Generated image";
+
+    const actions = document.createElement("div");
+    actions.className = "image-actions";
+
+    const download = document.createElement("a");
+    download.className = "download-image";
+    download.href = img.src;
+    download.download = "krishti-ai-generated.png";
+    download.textContent = "↓ Save image";
+
+    actions.appendChild(download);
+    bubble.appendChild(img);
+    bubble.appendChild(actions);
+    messageDiv.appendChild(bubble);
+    messagesContainer.appendChild(messageDiv);
+    scrollToBottom();
+}
+
+
+function autoResizeInput() {
+    if (!userInput) return;
+    userInput.style.height = "auto";
+    userInput.style.height = Math.min(userInput.scrollHeight, 140) + "px";
 }
 
 
@@ -409,22 +420,69 @@ if (chatForm) {
 // =========================================================
 
 if (userInput) {
-
-    userInput.addEventListener(
-        "keydown",
-        event => {
-
-            if (
-                event.key === "Enter" &&
-                !event.shiftKey
-            ) {
-
-                event.preventDefault();
-
-                sendMessage();
-            }
+    userInput.addEventListener("keydown", event => {
+        if (event.key === "Enter" && !event.shiftKey) {
+            event.preventDefault();
+            sendMessage();
         }
-    );
+    });
+
+    userInput.addEventListener("input", autoResizeInput);
+}
+
+
+// =========================================================
+// PHOTO UPLOAD
+// =========================================================
+
+if (photoButton && imageInput) {
+    photoButton.addEventListener("click", () => {
+        if (!isSending) imageInput.click();
+    });
+}
+
+if (imageInput) {
+    imageInput.addEventListener("change", event => {
+        const file = event.target.files && event.target.files[0];
+        if (!file) return;
+
+        const allowed = ["image/jpeg", "image/png", "image/webp"];
+        if (!allowed.includes(file.type)) {
+            addMessage("❌ Please choose a JPG, PNG or WEBP photo.", "ai");
+            imageInput.value = "";
+            return;
+        }
+
+        if (file.size > 10 * 1024 * 1024) {
+            addMessage("❌ Photo is too large. Please choose an image under 10 MB.", "ai");
+            imageInput.value = "";
+            return;
+        }
+
+        selectedImage = file;
+
+        if (imagePreview) {
+            imagePreview.src = URL.createObjectURL(file);
+        }
+        if (imageName) {
+            imageName.textContent = file.name;
+        }
+        if (imageAttachment) {
+            imageAttachment.hidden = false;
+        }
+        if (userInput) userInput.focus();
+    });
+}
+
+if (removeImageButton) {
+    removeImageButton.addEventListener("click", removeSelectedImage);
+}
+
+function removeSelectedImage() {
+    selectedImage = null;
+    if (imageInput) imageInput.value = "";
+    if (imageAttachment) imageAttachment.hidden = true;
+    if (imagePreview) imagePreview.removeAttribute("src");
 }
 
 
@@ -526,10 +584,7 @@ if (attachButton) {
 
             if (documentUploadArea) {
 
-                documentUploadArea.style.display =
-                    documentUploadArea.style.display === "none"
-                        ? "block"
-                        : "none";
+                documentUploadArea.hidden = !documentUploadArea.hidden;
             }
         }
     );
@@ -639,10 +694,9 @@ if (documentInput) {
             }
 
 
-            addMessage(
-                `📄 Document selected: ${file.name}`,
-                "ai"
-            );
+            if (documentUploadArea) {
+                documentUploadArea.hidden = false;
+            }
         }
     );
 }
@@ -750,12 +804,10 @@ if (newChatButton) {
 
 
             removeSelectedDocument();
-
+            removeSelectedImage();
 
             if (documentUploadArea) {
-
-                documentUploadArea.style.display =
-                    "none";
+                documentUploadArea.hidden = true;
             }
         }
     );
@@ -894,8 +946,7 @@ sidebarItems.forEach(
 
                     if (documentUploadArea) {
 
-                        documentUploadArea.style.display =
-                            "block";
+                        documentUploadArea.hidden = false;
                     }
 
 
@@ -909,8 +960,7 @@ sidebarItems.forEach(
                 else if (
                     text.includes("images")
                 ) {
-                    if (timelinePanel) timelinePanel.scrollIntoView({ behavior: "smooth", block: "start" });
-                    setTimelineStatus("🖼️ Photo Timeline Studio is ready.");
+                    if (imageInput) imageInput.click();
                 }
 
 
@@ -929,49 +979,6 @@ sidebarItems.forEach(
 
 
 // =========================================================
-// PHOTO TIMELINE STUDIO
-// =========================================================
-
-const timelineImage = document.getElementById("timelineImage");
-const timelinePreview = document.getElementById("timelinePreview");
-const timelineGenerate = document.getElementById("generateTimeline");
-const timelineStatus = document.getElementById("timelineStatus");
-const timelineResult = document.getElementById("timelineResult");
-const timelineButtons = document.querySelectorAll(".timeline-options button");
-const timelinePanel = document.getElementById("timelinePanel");
-let timelineFile = null;
-let selectedEra = "";
-
-function setTimelineStatus(message){ if(timelineStatus) timelineStatus.textContent=message||""; }
-
-if(timelineImage){ timelineImage.addEventListener("change",event=>{
-    const file=event.target.files&&event.target.files[0]; if(!file)return;
-    if(!["image/jpeg","image/png","image/webp"].includes(file.type)){ timelineFile=null; setTimelineStatus("❌ Please choose JPG, PNG or WEBP."); return; }
-    if(file.size>10*1024*1024){ timelineFile=null; setTimelineStatus("❌ Image is larger than 10 MB."); return; }
-    timelineFile=file; const reader=new FileReader();
-    reader.onload=()=>{ timelinePreview.innerHTML=`<img src="${reader.result}" alt="Selected photo preview">`; timelinePreview.classList.add("visible"); timelineResult.innerHTML=""; timelineResult.classList.remove("visible"); setTimelineStatus("✅ Photo selected. Now choose a timeline."); };
-    reader.onerror=()=>setTimelineStatus("❌ Could not read the photo."); reader.readAsDataURL(file);
-}); }
-
-timelineButtons.forEach(button=>button.addEventListener("click",()=>{ timelineButtons.forEach(btn=>btn.classList.remove("active")); button.classList.add("active"); selectedEra=button.dataset.era||""; setTimelineStatus(`Selected: ${selectedEra}`); }));
-
-async function generateTimelinePhoto(){
-    if(!timelineFile){setTimelineStatus("⚠️ Upload a photo first.");return;}
-    if(!selectedEra){setTimelineStatus("⚠️ Select a timeline first.");return;}
-    timelineGenerate.disabled=true; setTimelineStatus(`✨ Creating your ${selectedEra} version...`); timelineResult.innerHTML=""; timelineResult.classList.remove("visible");
-    try{
-        const payload=await fileToGeminiPayload(timelineFile);
-        const response=await fetch("/api/timeline",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({image:payload.data,mimeType:payload.mimeType,era:selectedEra})});
-        const raw=await response.text(); let data; try{data=JSON.parse(raw);}catch{data={error:raw};}
-        if(!response.ok||!data.success||!data.image)throw new Error(data.error||"Timeline generation failed.");
-        const imageSrc=`data:${data.mimeType||"image/png"};base64,${data.image}`;
-        timelineResult.innerHTML=`<img src="${imageSrc}" alt="Generated ${escapeHTML(selectedEra)} timeline photo"><br><a class="timeline-download" download="krishti-${selectedEra}.png" href="${imageSrc}">⬇️ Download Image</a>`;
-        timelineResult.classList.add("visible"); setTimelineStatus(`✅ ${selectedEra} timeline created successfully.`);
-    }catch(error){console.error("Timeline generation error:",error);setTimelineStatus(`❌ ${error.message||"Timeline generation failed."}`);}finally{timelineGenerate.disabled=false;}
-}
-if(timelineGenerate)timelineGenerate.addEventListener("click",generateTimelinePhoto);
-
-// =========================================================
 // STARTUP
 // =========================================================
 
@@ -986,5 +993,5 @@ console.log(
 );
 
 console.log(
-    "Document upload UI enabled."
+    "Photo upload + natural language image editing enabled."
 );

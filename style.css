@@ -978,33 +978,327 @@ body {
     }
 }
 
-
 /* =========================================================
-   PHOTO TIMELINE STUDIO
-========================================================= */
-.timeline-panel { width:min(900px,calc(100% - 30px)); margin:12px auto 18px; padding:22px; border:1px solid #2d3950; border-radius:22px; background:linear-gradient(145deg,#111827,#0d1422); box-shadow:0 18px 55px rgba(0,0,0,.24); }
-.timeline-heading h2 { margin:9px 0 5px; font-size:25px; }
-.timeline-heading p { margin:0; color:#94a3b8; line-height:1.5; }
-.timeline-badge { display:inline-flex; padding:5px 9px; border-radius:999px; background:rgba(109,93,252,.12); color:#b8afff; font-size:11px; font-weight:800; letter-spacing:.08em; }
-.timeline-upload { margin-top:18px; min-height:145px; border:2px dashed #334155; border-radius:18px; display:flex; flex-direction:column; align-items:center; justify-content:center; cursor:pointer; background:rgba(255,255,255,.015); transition:.2s; }
-.timeline-upload:hover { border-color:#6d5dfc; background:rgba(109,93,252,.06); }
-.timeline-upload-icon { font-size:38px; margin-bottom:7px; }
-.timeline-upload span { margin-top:5px; color:#64748b; font-size:12px; }
-.timeline-preview { display:none; margin-top:14px; text-align:center; }
-.timeline-preview.visible { display:block; }
-.timeline-preview img { width:auto; max-width:100%; max-height:320px; border-radius:16px; object-fit:contain; border:1px solid #293548; }
-.timeline-options { display:grid; grid-template-columns:repeat(6,minmax(0,1fr)); gap:9px; margin-top:15px; }
-.timeline-options button { min-height:58px; border:1px solid #293548; border-radius:13px; background:#151d2d; color:#e5e7eb; cursor:pointer; font-size:14px; transition:transform .15s,border-color .15s,background .15s; }
-.timeline-options button:hover { transform:translateY(-1px); border-color:#6d5dfc; }
-.timeline-options button.active { background:#3d347e; border-color:#8b7dff; box-shadow:0 0 0 2px rgba(109,93,252,.14); }
-.timeline-options button span { display:block; margin-top:3px; font-size:12px; }
-.timeline-generate { width:100%; margin-top:15px; padding:14px; border:0; border-radius:13px; background:linear-gradient(135deg,#6d5dfc,#8b5cf6); color:white; font-size:15px; font-weight:800; cursor:pointer; }
-.timeline-generate:disabled { opacity:.55; cursor:not-allowed; }
-.timeline-status { min-height:22px; margin-top:11px; text-align:center; color:#94a3b8; font-size:13px; }
-.timeline-result { display:none; margin-top:16px; text-align:center; }
-.timeline-result.visible { display:block; }
-.timeline-result img { max-width:100%; max-height:650px; border-radius:18px; border:1px solid #293548; box-shadow:0 15px 45px rgba(0,0,0,.35); }
-.timeline-download { display:inline-flex; margin-top:11px; padding:10px 16px; border-radius:10px; background:#202b40; color:white; text-decoration:none; border:1px solid #344155; }
-.timeline-download:hover { background:#2b3952; }
-@media (max-width:800px){ .timeline-options{grid-template-columns:repeat(3,1fr);} }
-@media (max-width:500px){ .timeline-panel{width:calc(100% - 20px);padding:16px;border-radius:18px;} .timeline-heading h2{font-size:21px;} .timeline-options{grid-template-columns:repeat(2,1fr);} .timeline-upload{min-height:125px;} }
+   V4 — CHATGPT-LIKE COMPOSER + PHOTO EDITING
+   ========================================================= */
+
+.document-upload-area {
+    width: min(850px, 78%);
+    margin: 8px auto 0;
+    padding: 12px 14px;
+    background: #151d2d;
+    border: 1px solid #293548;
+    border-radius: 14px;
+    box-shadow: 0 8px 25px rgba(0,0,0,.18);
+}
+
+.document-upload-inner {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.document-icon {
+    width: 38px;
+    height: 38px;
+    display: grid;
+    place-items: center;
+    border-radius: 10px;
+    background: #202b40;
+    font-size: 20px;
+}
+
+.document-upload-inner strong {
+    font-size: 14px;
+}
+
+.document-upload-inner p {
+    margin-top: 3px;
+    color: #94a3b8;
+    font-size: 12px;
+}
+
+.document-upload-inner button {
+    margin-left: auto;
+    border: 0;
+    border-radius: 9px;
+    padding: 8px 12px;
+    background: #26325a;
+    color: #fff;
+    cursor: pointer;
+}
+
+.selected-document {
+    margin-top: 8px;
+    font-size: 12px;
+    color: #cbd5e1;
+}
+
+.composer-wrap {
+    width: min(850px, 78%);
+    flex-shrink: 0;
+    margin: 0 auto 18px;
+    position: relative;
+    z-index: 50;
+}
+
+.image-attachment {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: fit-content;
+    max-width: 100%;
+    margin: 0 0 7px 6px;
+    padding: 7px 9px;
+    background: #151d2d;
+    border: 1px solid #344155;
+    border-radius: 12px;
+    box-shadow: 0 5px 20px rgba(0,0,0,.22);
+}
+
+.image-attachment[hidden],
+.document-upload-area[hidden] {
+    display: none;
+}
+
+.image-attachment img {
+    width: 48px;
+    height: 48px;
+    border-radius: 8px;
+    object-fit: cover;
+}
+
+.image-attachment-info {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.image-attachment-info strong {
+    max-width: 220px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 13px;
+}
+
+.image-attachment-info span {
+    color: #94a3b8;
+    font-size: 11px;
+}
+
+.image-attachment > button {
+    width: 28px;
+    height: 28px;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: #94a3b8;
+    font-size: 22px;
+    cursor: pointer;
+}
+
+.image-attachment > button:hover {
+    background: #202b40;
+    color: #fff;
+}
+
+.input-area {
+    width: 100%;
+    min-height: 58px;
+    margin: 0;
+    padding: 7px 8px;
+    border-radius: 18px;
+    background: #151d2d;
+    border: 1px solid #344155;
+}
+
+.input-area textarea {
+    flex: 1;
+    width: 100%;
+    min-width: 0;
+    min-height: 42px;
+    max-height: 140px;
+    resize: none;
+    overflow-y: auto;
+    padding: 10px 8px;
+    border: 0;
+    outline: 0;
+    background: transparent;
+    color: #fff;
+    font-size: 15px;
+    line-height: 1.45;
+    font-family: inherit;
+}
+
+.input-area textarea::placeholder {
+    color: #64748b;
+}
+
+.attach,
+.photo,
+.voice {
+    flex-shrink: 0;
+    width: 42px;
+    height: 42px;
+    display: grid;
+    place-items: center;
+    border: 0;
+    border-radius: 11px;
+    background: transparent;
+    color: #cbd5e1;
+    cursor: pointer;
+    font-size: 18px;
+}
+
+.attach:hover,
+.photo:hover,
+.voice:hover {
+    background: #202b40;
+    color: #fff;
+}
+
+.photo {
+    font-size: 17px;
+}
+
+.input-area button:disabled {
+    opacity: .45;
+    cursor: not-allowed;
+}
+
+.composer-hint {
+    text-align: center;
+    margin-top: 7px;
+    color: #64748b;
+    font-size: 10px;
+}
+
+.message-content {
+    max-width: min(780px, 85%);
+    padding: 13px 16px;
+    border-radius: 14px;
+    line-height: 1.55;
+    word-wrap: break-word;
+    overflow-wrap: anywhere;
+    white-space: pre-wrap;
+}
+
+.message-content.image-message,
+.message-content.image-result {
+    padding: 7px;
+    overflow: hidden;
+}
+
+.message-image,
+.generated-image {
+    display: block;
+    width: min(420px, 72vw);
+    max-width: 100%;
+    border-radius: 10px;
+    object-fit: contain;
+}
+
+.image-message-caption {
+    padding: 9px 5px 4px;
+    white-space: pre-wrap;
+    font-size: 14px;
+}
+
+.image-actions {
+    display: flex;
+    justify-content: flex-end;
+    padding: 7px 4px 2px;
+}
+
+.download-image {
+    color: #a5b4fc;
+    text-decoration: none;
+    font-size: 12px;
+}
+
+.download-image:hover {
+    text-decoration: underline;
+}
+
+/* The old welcome screen remains clean; the composer stays at the bottom. */
+.welcome {
+    flex: 1;
+}
+
+.messages:empty {
+    display: none;
+}
+
+@media (max-width: 900px) {
+    .composer-wrap,
+    .document-upload-area {
+        width: 86%;
+    }
+}
+
+@media (max-width: 700px) {
+    .composer-wrap {
+        position: fixed;
+        left: 10px;
+        right: 10px;
+        bottom: calc(8px + env(safe-area-inset-bottom));
+        width: auto;
+        margin: 0;
+    }
+
+    .document-upload-area {
+        position: fixed;
+        left: 10px;
+        right: 10px;
+        bottom: 82px;
+        width: auto;
+        z-index: 10000;
+    }
+
+    .composer-hint {
+        display: none;
+    }
+
+    .input-area {
+        min-height: 56px;
+        border-radius: 17px;
+    }
+
+    .input-area textarea {
+        font-size: 15px;
+    }
+
+    .attach,
+    .photo,
+    .voice {
+        width: 38px;
+        height: 42px;
+    }
+
+    .send {
+        min-width: 43px;
+        min-height: 43px;
+    }
+
+    .message-content {
+        max-width: 90%;
+    }
+}
+
+@media (max-width: 700px) {
+    .composer-wrap .input-area {
+        position: relative;
+        left: auto;
+        right: auto;
+        bottom: auto;
+        margin: 0;
+    }
+}
+
+@supports (padding: env(safe-area-inset-bottom)) {
+    .composer-wrap .input-area {
+        margin-bottom: 0;
+    }
+}
