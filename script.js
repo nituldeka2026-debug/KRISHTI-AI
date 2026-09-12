@@ -2,10 +2,17 @@
 // KRISHTI AI V2 — FRONTEND SCRIPT
 // =========================================================
 
-const chatForm = document.getElementById("chatForm");
-const userInput = document.getElementById("userInput");
-const sendButton = document.getElementById("sendButton");
-const voiceButton = document.getElementById("voiceButton");
+const chatForm =
+    document.getElementById("chatForm");
+
+const userInput =
+    document.getElementById("userInput");
+
+const sendButton =
+    document.getElementById("sendButton");
+
+const voiceButton =
+    document.getElementById("voiceButton");
 
 const messagesContainer =
     document.querySelector(".messages");
@@ -19,7 +26,34 @@ const newChatButton =
 const quickButtons =
     document.querySelectorAll("[data-prompt]");
 
+
+// =========================================================
+// DOCUMENT ELEMENTS
+// =========================================================
+
+const attachButton =
+    document.getElementById("attachButton");
+
+const documentInput =
+    document.getElementById("documentInput");
+
+const documentUploadArea =
+    document.getElementById("documentUploadArea");
+
+const chooseDocument =
+    document.getElementById("chooseDocument");
+
+const selectedDocument =
+    document.getElementById("selectedDocument");
+
+
+// =========================================================
+// STATE
+// =========================================================
+
 let isSending = false;
+
+let selectedFile = null;
 
 
 // =========================================================
@@ -43,7 +77,9 @@ function addMessage(text, sender) {
     bubble.textContent =
         text;
 
-    messageDiv.appendChild(bubble);
+    messageDiv.appendChild(
+        bubble
+    );
 
     messagesContainer.appendChild(
         messageDiv
@@ -60,6 +96,10 @@ function addMessage(text, sender) {
 // =========================================================
 
 function scrollToBottom() {
+
+    if (!messagesContainer) {
+        return;
+    }
 
     messagesContainer.scrollTop =
         messagesContainer.scrollHeight;
@@ -105,21 +145,19 @@ function setSendingState(state) {
     isSending = state;
 
     if (sendButton) {
-
-        sendButton.disabled =
-            state;
+        sendButton.disabled = state;
     }
 
     if (userInput) {
-
-        userInput.disabled =
-            state;
+        userInput.disabled = state;
     }
 
     if (voiceButton) {
+        voiceButton.disabled = state;
+    }
 
-        voiceButton.disabled =
-            state;
+    if (attachButton) {
+        attachButton.disabled = state;
     }
 }
 
@@ -134,19 +172,20 @@ async function sendMessage(customMessage = null) {
         return;
     }
 
+
     const message =
         customMessage !== null
             ? customMessage.trim()
             : userInput.value.trim();
+
 
     if (!message) {
         return;
     }
 
 
-    // Hide welcome screen
+    // Hide welcome
     if (welcomeSection) {
-
         welcomeSection.style.display =
             "none";
     }
@@ -161,7 +200,6 @@ async function sendMessage(customMessage = null) {
 
     // Clear input
     if (userInput) {
-
         userInput.value = "";
     }
 
@@ -187,16 +225,17 @@ async function sendMessage(customMessage = null) {
                             "application/json"
                     },
 
-                    body: JSON.stringify({
-                        message: message
-                    })
+                    body:
+                        JSON.stringify({
+                            message:
+                                message
+                        })
                 }
             );
 
 
         // Remove typing
         if (typing) {
-
             typing.remove();
         }
 
@@ -207,11 +246,12 @@ async function sendMessage(customMessage = null) {
             let errorText =
                 await response.text();
 
-            if (!errorText) {
 
+            if (!errorText) {
                 errorText =
                     "Something went wrong.";
             }
+
 
             addMessage(
                 errorText,
@@ -222,7 +262,7 @@ async function sendMessage(customMessage = null) {
         }
 
 
-        // Create AI message
+        // AI message
         const aiBubble =
             addMessage(
                 "",
@@ -230,7 +270,7 @@ async function sendMessage(customMessage = null) {
             );
 
 
-        // Check streaming
+        // No streaming body
         if (!response.body) {
 
             const text =
@@ -321,7 +361,6 @@ async function sendMessage(customMessage = null) {
 
 
         if (typing) {
-
             typing.remove();
         }
 
@@ -335,8 +374,8 @@ async function sendMessage(customMessage = null) {
 
         setSendingState(false);
 
-        if (userInput) {
 
+        if (userInput) {
             userInput.focus();
         }
     }
@@ -399,9 +438,11 @@ quickButtons.forEach(
                 const prompt =
                     button.dataset.prompt;
 
+
                 if (!prompt) {
                     return;
                 }
+
 
                 sendMessage(
                     prompt
@@ -410,6 +451,225 @@ quickButtons.forEach(
         );
     }
 );
+
+
+// =========================================================
+// DOCUMENT UPLOAD
+// =========================================================
+
+function openDocumentPicker() {
+
+    if (!documentInput) {
+        return;
+    }
+
+    documentInput.click();
+}
+
+
+// =========================================================
+// ATTACH BUTTON
+// =========================================================
+
+if (attachButton) {
+
+    attachButton.addEventListener(
+        "click",
+        () => {
+
+            if (isSending) {
+                return;
+            }
+
+
+            if (documentUploadArea) {
+
+                documentUploadArea.style.display =
+                    documentUploadArea.style.display === "none"
+                        ? "block"
+                        : "none";
+            }
+        }
+    );
+}
+
+
+// =========================================================
+// CHOOSE DOCUMENT BUTTON
+// =========================================================
+
+if (chooseDocument) {
+
+    chooseDocument.addEventListener(
+        "click",
+        openDocumentPicker
+    );
+}
+
+
+// =========================================================
+// DOCUMENT SELECT
+// =========================================================
+
+if (documentInput) {
+
+    documentInput.addEventListener(
+        "change",
+        event => {
+
+            const file =
+                event.target.files[0];
+
+
+            if (!file) {
+                return;
+            }
+
+
+            // Maximum 10 MB
+            const maxSize =
+                10 * 1024 * 1024;
+
+
+            if (file.size > maxSize) {
+
+                addMessage(
+                    "❌ File is too large. Please select a file smaller than 10 MB.",
+                    "ai"
+                );
+
+
+                documentInput.value =
+                    "";
+
+                selectedFile =
+                    null;
+
+                return;
+            }
+
+
+            selectedFile =
+                file;
+
+
+            // Show selected file
+            if (selectedDocument) {
+
+                selectedDocument.innerHTML = `
+                    <div>
+                        📄 <strong>${escapeHTML(file.name)}</strong>
+                    </div>
+
+                    <div style="margin-top:6px; opacity:.7;">
+                        ${formatFileSize(file.size)}
+                    </div>
+
+                    <button
+                        type="button"
+                        id="removeDocument"
+                        style="
+                            margin-top:10px;
+                            padding:7px 12px;
+                            border:0;
+                            border-radius:8px;
+                            cursor:pointer;
+                        "
+                    >
+                        ❌ Remove
+                    </button>
+                `;
+
+
+                const removeButton =
+                    document.getElementById(
+                        "removeDocument"
+                    );
+
+
+                if (removeButton) {
+
+                    removeButton.addEventListener(
+                        "click",
+                        removeSelectedDocument
+                    );
+                }
+            }
+
+
+            addMessage(
+                `📄 Document selected: ${file.name}`,
+                "ai"
+            );
+        }
+    );
+}
+
+
+// =========================================================
+// REMOVE DOCUMENT
+// =========================================================
+
+function removeSelectedDocument() {
+
+    selectedFile =
+        null;
+
+
+    if (documentInput) {
+
+        documentInput.value =
+            "";
+    }
+
+
+    if (selectedDocument) {
+
+        selectedDocument.innerHTML =
+            "";
+    }
+}
+
+
+// =========================================================
+// FILE SIZE
+// =========================================================
+
+function formatFileSize(bytes) {
+
+    if (bytes < 1024) {
+        return `${bytes} B`;
+    }
+
+
+    if (bytes < 1024 * 1024) {
+
+        return `${(
+            bytes / 1024
+        ).toFixed(1)} KB`;
+    }
+
+
+    return `${(
+        bytes /
+        (1024 * 1024)
+    ).toFixed(1)} MB`;
+}
+
+
+// =========================================================
+// HTML ESCAPE
+// =========================================================
+
+function escapeHTML(text) {
+
+    return String(text)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+}
 
 
 // =========================================================
@@ -440,9 +700,20 @@ if (newChatButton) {
 
             if (userInput) {
 
-                userInput.value = "";
+                userInput.value =
+                    "";
 
                 userInput.focus();
+            }
+
+
+            removeSelectedDocument();
+
+
+            if (documentUploadArea) {
+
+                documentUploadArea.style.display =
+                    "none";
             }
         }
     );
@@ -474,7 +745,8 @@ if (
         false;
 
     recognition.lang =
-        navigator.language || "en-US";
+        navigator.language ||
+        "en-US";
 
 
     voiceButton.addEventListener(
@@ -484,6 +756,7 @@ if (
             if (isSending) {
                 return;
             }
+
 
             try {
 
@@ -503,7 +776,8 @@ if (
         event => {
 
             const transcript =
-                event.results[0][0].transcript;
+                event.results[0][0]
+                    .transcript;
 
 
             userInput.value =
@@ -545,7 +819,7 @@ else if (voiceButton) {
 
 const sidebarItems =
     document.querySelectorAll(
-        ".sidebar div"
+        ".sidebar .menu-item"
     );
 
 
@@ -569,28 +843,37 @@ sidebarItems.forEach(
                     sendMessage(
                         "I want to learn programming and coding. Help me with code step by step."
                     );
-
                 }
+
 
                 else if (
                     text.includes("documents")
                 ) {
 
+                    if (documentUploadArea) {
+
+                        documentUploadArea.style.display =
+                            "block";
+                    }
+
+
                     addMessage(
-                        "📄 Document upload feature is coming in the next V2 step.",
+                        "📄 Choose a document to upload. PDF and text documents are supported in this stage.",
                         "ai"
                     );
                 }
+
 
                 else if (
                     text.includes("images")
                 ) {
 
                     addMessage(
-                        "🖼️ Image analysis feature is coming in the next V2 step.",
+                        "🖼️ Image analysis will be added in the next stage.",
                         "ai"
                     );
                 }
+
 
                 else if (
                     text.includes("web search")
@@ -618,4 +901,8 @@ if (userInput) {
 
 console.log(
     "Krishti AI V2 frontend loaded successfully."
+);
+
+console.log(
+    "Document upload UI enabled."
 );
