@@ -708,6 +708,38 @@ async function sendMessage(customMessage = null) {
         return;
     }
 
+    // Web search mode uses Gemini's grounded Google Search tool.
+    if (webSearchMode) {
+        addMessage(message, "user");
+        if (userInput) { userInput.value = ""; autoResizeInput(); }
+        const typing = showTyping();
+        setSendingState(true);
+        try {
+            const response = await fetch("/api/search", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ message })
+            });
+            if (typing) typing.remove();
+            const aiBubble = addMessage("", "ai");
+            const text = await response.text();
+            if (!response.ok) { aiBubble.textContent = text || "Web search failed."; return; }
+            aiBubble.textContent = text || "No search result was returned.";
+            const lastMessage = currentMessages[currentMessages.length - 1];
+            if (lastMessage && lastMessage.sender === "ai") lastMessage.text = aiBubble.textContent;
+            persistMessages();
+        } catch (error) {
+            console.error("Web search error:", error);
+            if (typing) typing.remove();
+            addMessage("Connection error while searching the web. Please try again.", "ai");
+        } finally {
+            setSendingState(false);
+            setWebSearchMode(false);
+            if (userInput) userInput.focus();
+        }
+        return;
+    }
+
     // Normal chat / document chat.
     addMessage(message || "Please analyze the uploaded document.", "user");
 
@@ -1451,6 +1483,20 @@ sidebarItems.forEach(
 // KRISHTI UI CONTROLS
 // =========================================================
 const attachmentMenu = document.getElementById("attachmentMenu");
+const modeIndicator = document.getElementById("modeIndicator");
+let webSearchMode = false;
+
+function setWebSearchMode(enabled) {
+    webSearchMode = !!enabled;
+    if (modeIndicator) {
+        modeIndicator.hidden = !webSearchMode;
+        modeIndicator.textContent = webSearchMode ? "🌐 Web Search mode enabled" : "";
+    }
+    if (userInput) {
+        userInput.placeholder = webSearchMode ? "Search the web with Krishti..." : "Ask Krishti anything...";
+    }
+}
+
 const sidebarEl = document.getElementById("sidebar");
 const sidebarToggle = document.getElementById("sidebarToggle");
 const sidebarClose = document.getElementById("sidebarClose");
@@ -1483,6 +1529,10 @@ if (attachmentMenu) {
             if (!isSending && imageInput) { imageInput.removeAttribute("capture"); imageInput.click(); }
         } else if (action === "files") {
             if (!isSending && documentInput) documentInput.click();
+        } else if (action === "web") {
+            setWebSearchMode(true);
+            showToast("Web Search mode enabled. Ask Krishti for current information.");
+            if (userInput) userInput.focus();
         } else if (action === "plugins") {
             showToast("Plugins panel is ready for connected tools.");
         } else if (action === "think") {

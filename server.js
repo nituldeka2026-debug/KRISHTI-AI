@@ -507,6 +507,59 @@ async function handleImageEdit(req, res) {
 }
 
 /* =========================================================
+   WEB SEARCH API
+========================================================= */
+
+async function handleSearch(req, res) {
+    try {
+        const body = await readRequestBody(req);
+        let data;
+        try { data = JSON.parse(body); }
+        catch (_) { return sendJSON(res, 400, { success: false, error: "Invalid JSON request." }); }
+
+        const message = typeof data.message === "string" ? data.message.trim() : "";
+        if (!message) return sendJSON(res, 400, { success: false, error: "Please enter a search query." });
+        if (message.length > MAX_MESSAGE_LENGTH) return sendJSON(res, 400, { success: false, error: "Search query is too long." });
+        if (!GEMINI_API_KEY) return sendText(res, 500, "Gemini API key is not configured on the server.");
+
+        const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
+        const prompt = `You are Krishti AI's web research assistant. Search the web for the user's request and answer using current, verifiable information. Prefer authoritative and recent sources. Clearly distinguish facts from uncertainty. Include useful source names and direct URLs in a short Sources section when the search tool provides them. User request: ${message}`;
+
+        let result;
+        try {
+            result = await ai.models.generateContent({
+                model: GEMINI_MODEL,
+                contents: prompt,
+                config: {
+                    tools: [{ googleSearch: {} }]
+                }
+            });
+        } catch (error) {
+            console.error("Gemini web search error:", error);
+            return sendText(res, 500, getGeminiErrorMessage(error));
+        }
+
+        let text = typeof result?.text === "string" ? result.text : "";
+        const grounding = result?.candidates?.[0]?.groundingMetadata;
+        const chunks = Array.isArray(grounding?.groundingChunks) ? grounding.groundingChunks : [];
+        const sources = [];
+        for (const chunk of chunks) {
+            const web = chunk?.web;
+            if (web?.uri && web?.title && !sources.some(s => s.uri === web.uri)) {
+                sources.push({ title: web.title, uri: web.uri });
+            }
+        }
+        if (sources.length && !/sources\s*:/i.test(text)) {
+            text += "\n\nSources:\n" + sources.slice(0, 8).map(s => `- ${s.title}: ${s.uri}`).join("\n");
+        }
+        return sendText(res, 200, text || "No web search result was returned.");
+    } catch (error) {
+        console.error("Web search API error:", error);
+        return sendText(res, 500, "Web search failed. Please try again.");
+    }
+}
+
+/* =========================================================
    CHAT API
 ========================================================= */
 
@@ -1079,6 +1132,19 @@ const server =
                 return;
             }
 
+
+            if (
+                req.method === "POST" &&
+                pathname === "/api/search"
+            ) {
+
+                handleSearch(
+                    req,
+                    res
+                );
+
+                return;
+            }
 
             /* =====================================
                CHAT API

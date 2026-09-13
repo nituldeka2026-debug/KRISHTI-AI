@@ -1695,3 +1695,23 @@ body{background:var(--krishti-bg)}
 .topbar-avatar img{width:100%;height:100%;object-fit:cover;display:block}
 .hero-logo-img{width:82px;height:82px;border-radius:24px;object-fit:cover;display:block;box-shadow:0 16px 42px rgba(20,184,166,.15),0 12px 34px rgba(139,92,246,.2)}
 .hero-mark{display:none}
+
+/* =========================================================
+   V11 — KRISHTI WEB SEARCH MODE
+========================================================= */
+.mode-indicator {
+    width: fit-content;
+    max-width: min(720px, 92%);
+    margin: 0 auto 8px;
+    padding: 7px 11px;
+    border: 1px solid color-mix(in srgb, var(--krishti-accent, #6d5dfc) 45%, transparent);
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--krishti-accent, #6d5dfc) 12%, transparent);
+    color: #dfe5ff;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.attachment-menu button[data-attach="web"] {
+    border-color: color-mix(in srgb, var(--krishti-accent, #6d5dfc) 38%, transparent);
+}
