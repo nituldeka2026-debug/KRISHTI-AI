@@ -75,6 +75,239 @@ let isSending = false;
 let selectedFile = null;
 let selectedImage = null;
 
+// =========================================================
+// LOCAL CHAT HISTORY V6
+// =========================================================
+const HISTORY_KEY = "krishti_ai_chat_history_v1";
+const historyList = document.getElementById("chatHistoryList");
+const historySearch = document.getElementById("historySearch");
+const historySearchButton = document.getElementById("historySearchButton");
+const renameChatButton = document.getElementById("renameChatButton");
+const currentChatTitle = document.getElementById("currentChatTitle");
+const toast = document.getElementById("toast");
+const settingsButton = document.getElementById("settingsButton");
+
+let chats = [];
+let currentChatId = null;
+let currentMessages = [];
+let historySearchOpen = false;
+let restoringChat = false;
+
+function loadHistory() {
+    try {
+        const raw = localStorage.getItem(HISTORY_KEY);
+        chats = raw ? JSON.parse(raw) : [];
+        if (!Array.isArray(chats)) chats = [];
+    } catch (error) {
+        console.error("History load error:", error);
+        chats = [];
+    }
+}
+
+function saveHistory() {
+    try {
+        localStorage.setItem(HISTORY_KEY, JSON.stringify(chats));
+    } catch (error) {
+        console.warn("History could not be saved:", error);
+    }
+}
+
+function makeChatId() {
+    return "chat_" + Date.now() + "_" + Math.random().toString(36).slice(2, 8);
+}
+
+function createChat() {
+    const chat = {
+        id: makeChatId(),
+        title: "New Chat",
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+        messages: []
+    };
+    chats.unshift(chat);
+    currentChatId = chat.id;
+    currentMessages = [];
+    saveHistory();
+    renderHistory();
+    updateCurrentTitle();
+    return chat;
+}
+
+function getCurrentChat() {
+    return chats.find(chat => chat.id === currentChatId) || null;
+}
+
+function ensureCurrentChat() {
+    let chat = getCurrentChat();
+    if (!chat) chat = createChat();
+    return chat;
+}
+
+function deriveTitle(text) {
+    const clean = String(text || "").replace(/\s+/g, " ").trim();
+    if (!clean) return "New Chat";
+    return clean.length > 42 ? clean.slice(0, 42).trimEnd() + "…" : clean;
+}
+
+function persistMessages() {
+    if (restoringChat) return;
+    const chat = ensureCurrentChat();
+    chat.messages = currentMessages.slice(-100);
+    chat.updatedAt = Date.now();
+    const firstUser = chat.messages.find(m => m.sender === "user" && m.text);
+    if (firstUser && chat.title === "New Chat") chat.title = deriveTitle(firstUser.text);
+    saveHistory();
+    renderHistory();
+    updateCurrentTitle();
+}
+
+function updateCurrentTitle() {
+    const chat = getCurrentChat();
+    if (currentChatTitle) currentChatTitle.textContent = chat?.title || "Krishti AI";
+}
+
+function renderHistory(filter = "") {
+    if (!historyList) return;
+    const query = String(filter || "").toLowerCase().trim();
+    const visible = chats
+        .slice()
+        .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))
+        .filter(chat => !query || String(chat.title || "").toLowerCase().includes(query));
+
+    historyList.innerHTML = "";
+    if (!visible.length) {
+        historyList.innerHTML = `<div class="history-empty">${query ? "No matching chats" : "Your chats will appear here"}</div>`;
+        return;
+    }
+
+    visible.slice(0, 50).forEach(chat => {
+        const row = document.createElement("div");
+        row.className = "history-item" + (chat.id === currentChatId ? " active" : "");
+        row.title = chat.title || "New Chat";
+
+        const title = document.createElement("span");
+        title.className = "history-item-title";
+        title.textContent = chat.title || "New Chat";
+
+        const menu = document.createElement("button");
+        menu.type = "button";
+        menu.className = "history-item-menu";
+        menu.textContent = "⋯";
+        menu.title = "Chat options";
+        menu.addEventListener("click", event => {
+            event.stopPropagation();
+            const action = window.prompt("Type: rename or delete", "rename");
+            if (!action) return;
+            if (action.toLowerCase().startsWith("del")) deleteChat(chat.id);
+            else if (action.toLowerCase().startsWith("ren")) renameChat(chat.id);
+        });
+
+        row.append(title, menu);
+        row.addEventListener("click", () => openChat(chat.id));
+        historyList.appendChild(row);
+    });
+}
+
+function renderStoredMessages(messages) {
+    messagesContainer.innerHTML = "";
+    (messages || []).forEach(item => {
+        if (!item || !item.text) return;
+        addMessageDOM(item.text, item.sender || "ai");
+    });
+    scrollToBottom();
+}
+
+function addMessageDOM(text, sender) {
+    const messageDiv = document.createElement("div");
+    messageDiv.className = `message ${sender}`;
+    const bubble = document.createElement("div");
+    bubble.className = "message-content";
+    bubble.textContent = text;
+    messageDiv.appendChild(bubble);
+    messagesContainer.appendChild(messageDiv);
+    return bubble;
+}
+
+function openChat(id) {
+    if (isSending) return;
+    const chat = chats.find(item => item.id === id);
+    if (!chat) return;
+    currentChatId = chat.id;
+    currentMessages = Array.isArray(chat.messages) ? chat.messages.slice() : [];
+    restoringChat = true;
+    renderStoredMessages(currentMessages);
+    restoringChat = false;
+    if (welcomeSection) welcomeSection.style.display = currentMessages.length ? "none" : "";
+    removeSelectedDocument();
+    removeSelectedImage();
+    if (documentUploadArea) documentUploadArea.hidden = true;
+    if (userInput) { userInput.value = ""; autoResizeInput(); userInput.focus(); }
+    updateCurrentTitle();
+    renderHistory(historySearch?.value || "");
+}
+
+function renameChat(id = currentChatId) {
+    const chat = chats.find(item => item.id === id);
+    if (!chat) return;
+    const name = window.prompt("Enter a new chat name:", chat.title || "New Chat");
+    if (name === null) return;
+    const clean = name.trim();
+    if (!clean) return;
+    chat.title = clean.slice(0, 80);
+    chat.updatedAt = Date.now();
+    saveHistory();
+    renderHistory(historySearch?.value || "");
+    updateCurrentTitle();
+}
+
+function deleteChat(id) {
+    const chat = chats.find(item => item.id === id);
+    if (!chat) return;
+    if (!window.confirm(`Delete "${chat.title || "New Chat"}"?`)) return;
+    chats = chats.filter(item => item.id !== id);
+    if (currentChatId === id) {
+        currentChatId = null;
+        currentMessages = [];
+        startFreshChat(false);
+    }
+    saveHistory();
+    renderHistory(historySearch?.value || "");
+}
+
+function startFreshChat(createHistoryEntry = true) {
+    if (isSending) return;
+    messagesContainer.innerHTML = "";
+    currentMessages = [];
+    currentChatId = null;
+    if (welcomeSection) welcomeSection.style.display = "";
+    if (userInput) { userInput.value = ""; autoResizeInput(); userInput.focus(); }
+    removeSelectedDocument();
+    removeSelectedImage();
+    if (documentUploadArea) documentUploadArea.hidden = true;
+    updateCurrentTitle();
+    if (createHistoryEntry) createChat();
+    renderHistory(historySearch?.value || "");
+}
+
+function showToast(text) {
+    if (!toast) return;
+    toast.textContent = text;
+    toast.classList.add("show");
+    clearTimeout(showToast.timer);
+    showToast.timer = setTimeout(() => toast.classList.remove("show"), 1800);
+}
+
+loadHistory();
+if (chats.length) {
+    const latest = chats.slice().sort((a,b)=>(b.updatedAt||0)-(a.updatedAt||0))[0];
+    currentChatId = latest.id;
+    currentMessages = Array.isArray(latest.messages) ? latest.messages.slice() : [];
+} else {
+    currentChatId = null;
+    currentMessages = [];
+}
+renderHistory();
+
 
 // =========================================================
 // ADD MESSAGE
@@ -104,6 +337,11 @@ function addMessage(text, sender) {
     messagesContainer.appendChild(
         messageDiv
     );
+
+    if (!restoringChat) {
+        currentMessages.push({ sender, text: String(text ?? "") });
+        persistMessages();
+    }
 
     scrollToBottom();
 
@@ -320,6 +558,9 @@ async function sendMessage(customMessage = null) {
 
         fullText += decoder.decode();
         aiBubble.textContent = fullText || "Sorry, I couldn't generate a response.";
+        const lastMessage = currentMessages[currentMessages.length - 1];
+        if (lastMessage && lastMessage.sender === "ai") lastMessage.text = aiBubble.textContent;
+        persistMessages();
 
     } catch (error) {
         console.error("Chat error:", error);
@@ -356,6 +597,10 @@ function addImageUserMessage(text, file) {
     bubble.appendChild(caption);
     messageDiv.appendChild(bubble);
     messagesContainer.appendChild(messageDiv);
+    if (!restoringChat) {
+        currentMessages.push({ sender: "user", text: `[Photo] ${text}` });
+        persistMessages();
+    }
     scrollToBottom();
 }
 
@@ -386,6 +631,10 @@ function addImageMessage(base64, mimeType) {
     bubble.appendChild(actions);
     messageDiv.appendChild(bubble);
     messagesContainer.appendChild(messageDiv);
+    if (!restoringChat) {
+        currentMessages.push({ sender: "ai", text: "[Generated image] Image created successfully. Open the original chat session to generate another image." });
+        persistMessages();
+    }
     scrollToBottom();
 }
 
@@ -769,49 +1018,51 @@ function escapeHTML(text) {
 
 
 // =========================================================
-// NEW CHAT
+// NEW CHAT / HISTORY CONTROLS
 // =========================================================
 
 if (newChatButton) {
+    newChatButton.addEventListener("click", () => startFreshChat(true));
+}
 
-    newChatButton.addEventListener(
-        "click",
-        () => {
+if (renameChatButton) {
+    renameChatButton.addEventListener("click", () => renameChat());
+}
 
-            if (isSending) {
-                return;
-            }
-
-
-            messagesContainer.innerHTML =
-                "";
-
-
-            if (welcomeSection) {
-
-                welcomeSection.style.display =
-                    "";
-            }
-
-
-            if (userInput) {
-
-                userInput.value =
-                    "";
-
-                userInput.focus();
-            }
-
-
-            removeSelectedDocument();
-            removeSelectedImage();
-
-            if (documentUploadArea) {
-                documentUploadArea.hidden = true;
+if (historySearchButton) {
+    historySearchButton.addEventListener("click", () => {
+        historySearchOpen = !historySearchOpen;
+        if (historySearch) {
+            historySearch.hidden = !historySearchOpen;
+            if (historySearchOpen) {
+                historySearch.focus();
+            } else {
+                historySearch.value = "";
+                renderHistory();
             }
         }
-    );
+    });
 }
+
+if (historySearch) {
+    historySearch.addEventListener("input", () => renderHistory(historySearch.value));
+}
+
+if (settingsButton) {
+    settingsButton.addEventListener("click", () => showToast("Settings will be added in the next upgrade."));
+}
+
+// =========================================================
+// RESTORE LAST CHAT ON LOAD
+// =========================================================
+
+if (currentMessages.length) {
+    restoringChat = true;
+    renderStoredMessages(currentMessages);
+    restoringChat = false;
+    if (welcomeSection) welcomeSection.style.display = "none";
+}
+updateCurrentTitle();
 
 
 // =========================================================

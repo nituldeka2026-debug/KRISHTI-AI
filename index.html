@@ -32,6 +32,15 @@
         + New Chat
     </button>
 
+    <div class="chat-history-panel">
+        <div class="history-head">
+            <span>Recent chats</span>
+            <button type="button" id="historySearchButton" title="Search chats">⌕</button>
+        </div>
+        <input id="historySearch" class="history-search" type="search" placeholder="Search chats..." aria-label="Search chats" hidden>
+        <div id="chatHistoryList" class="chat-history-list"></div>
+    </div>
+
     <div class="menu">
 
         <div class="menu-item">
@@ -57,7 +66,7 @@
     </div>
 
     <div class="sidebar-bottom">
-        ⚙️ Settings
+        <button type="button" class="settings-button" id="settingsButton">⚙️ Settings</button>
     </div>
 
 </aside>
@@ -75,12 +84,16 @@
 
         <div class="topbar-title">
 
-            <h2>Krishti AI</h2>
+            <h2 id="currentChatTitle">Krishti AI</h2>
 
             <span>
                 AI Assistant
             </span>
 
+        </div>
+
+        <div class="topbar-actions">
+            <button type="button" id="renameChatButton" class="topbar-icon" title="Rename chat" aria-label="Rename chat">✎</button>
         </div>
 
         <div class="online-status">
@@ -208,6 +221,8 @@
 
         <div class="composer-hint">Krishti AI can make mistakes. Check important information.</div>
     </div>
+
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
 
 </main>
 
