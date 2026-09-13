@@ -1340,3 +1340,198 @@ body {
 #phone-otp-section{margin-top:6px}
 .hidden{display:none!important}
 #recaptcha-container{min-height:0}
+
+
+/* =========================================================
+   CHATGPT-STYLE ATTACHMENT MENU + PREVIEWS
+   ========================================================= */
+
+.composer-wrap {
+    position: relative;
+}
+
+.attach {
+    position: relative;
+    flex-shrink: 0;
+    width: 44px;
+    height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid #344155;
+    border-radius: 50%;
+    background: #202a3d;
+    color: #fff;
+    font-size: 26px;
+    line-height: 1;
+    cursor: pointer;
+    transition: background .18s ease, transform .15s ease;
+}
+
+.attach:hover {
+    background: #2a3650;
+}
+
+.attach:active {
+    transform: scale(.96);
+}
+
+.attach:disabled {
+    opacity: .5;
+    cursor: not-allowed;
+}
+
+.attach-menu {
+    position: absolute;
+    left: 0;
+    bottom: 92px;
+    width: 190px;
+    padding: 7px;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    background: #151d2d;
+    border: 1px solid #344155;
+    border-radius: 15px;
+    box-shadow: 0 16px 45px rgba(0,0,0,.42);
+    z-index: 10000;
+    transform-origin: bottom left;
+    animation: attachMenuIn .14s ease-out;
+}
+
+.attach-menu[hidden] {
+    display: none;
+}
+
+.attach-menu button {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 13px;
+    border-radius: 10px;
+    background: transparent;
+    color: #e5e7eb;
+    text-align: left;
+    font-size: 14px;
+    cursor: pointer;
+}
+
+.attach-menu button:hover {
+    background: #222d43;
+}
+
+.attach-menu-icon {
+    width: 26px;
+    text-align: center;
+    font-size: 19px;
+}
+
+@keyframes attachMenuIn {
+    from { opacity: 0; transform: translateY(6px) scale(.98); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.attachment-preview {
+    display: flex;
+    gap: 9px;
+    width: 100%;
+    overflow-x: auto;
+    padding: 0 4px 9px;
+}
+
+.attachment-preview[hidden] {
+    display: none;
+}
+
+.attachment-card {
+    position: relative;
+    flex: 0 0 auto;
+    min-width: 76px;
+    min-height: 68px;
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding: 7px;
+    background: #151d2d;
+    border: 1px solid #344155;
+    border-radius: 12px;
+}
+
+.attachment-thumb {
+    width: 58px;
+    height: 58px;
+    object-fit: cover;
+    border-radius: 8px;
+    display: block;
+}
+
+.attachment-file-icon {
+    width: 38px;
+    height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    background: #202a3d;
+    font-size: 21px;
+}
+
+.attachment-file-info {
+    max-width: 180px;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.attachment-file-info strong {
+    max-width: 180px;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    font-size: 12px;
+}
+
+.attachment-file-info span {
+    color: #8f9ab1;
+    font-size: 10px;
+}
+
+.attachment-remove {
+    position: absolute;
+    top: -7px;
+    right: -7px;
+    width: 22px;
+    height: 22px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    border: 1px solid #46536b;
+    background: #263149;
+    color: #fff;
+    font-size: 16px;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.attachment-remove:hover {
+    background: #37445e;
+}
+
+@media (max-width: 700px) {
+    .attach-menu {
+        left: 0;
+        bottom: 84px;
+        width: 180px;
+        border-radius: 14px;
+    }
+
+    .attach-menu button {
+        padding: 11px 12px;
+    }
+
+    .attachment-file-info {
+        max-width: 150px;
+    }
+}

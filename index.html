@@ -195,26 +195,13 @@
         </div>
 
     </section>
-
-
-    <!-- ==============================
-         ATTACHMENT AREA
-    =============================== -->
-
-    <div id="documentUploadArea" class="document-upload-area" hidden>
-        <div class="document-upload-inner">
-            <div class="document-icon">📄</div>
-            <div>
-                <strong>Upload a document</strong>
-                <p>PDF, TXT, DOC or DOCX</p>
-            </div>
-            <button type="button" id="chooseDocument">Choose file</button>
-        </div>
-        <input type="file" id="documentInput" accept=".pdf,.txt,.doc,.docx" hidden>
-        <div id="selectedDocument" class="selected-document"></div>
-    </div>
-
-    <input type="file" id="imageInput" accept="image/jpeg,image/png,image/webp" hidden>
+    <!-- Hidden file pickers: opened from the + menu -->
+    <input type="file" id="documentInput"
+        accept=".pdf,.txt,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.csv,.zip" hidden>
+    <input type="file" id="imageInput"
+        accept="image/jpeg,image/png,image/webp" multiple hidden>
+    <input type="file" id="cameraInput"
+        accept="image/*" capture="environment" hidden>
 
     <!-- ==============================
          CHAT MESSAGES
@@ -231,31 +218,44 @@
     =============================== -->
 
     <div class="composer-wrap">
-        <div id="imageAttachment" class="image-attachment" hidden>
-            <img id="imagePreview" alt="Selected photo preview">
-            <div class="image-attachment-info">
-                <strong id="imageName">Photo attached</strong>
-                <span>Ready for your instruction</span>
-            </div>
-            <button type="button" id="removeImage" aria-label="Remove photo" title="Remove photo">×</button>
-        </div>
+
+        <!-- Attachment previews appear here after selecting an image/file -->
+        <div id="attachmentPreview" class="attachment-preview" hidden></div>
 
         <form class="input-area" autocomplete="off" id="chatForm">
-            <button class="attach" id="attachButton" type="button" aria-label="Attach document" title="Attach document">＋</button>
+            <button class="attach" id="attachButton" type="button"
+                    aria-label="Add attachment" title="Add attachment">＋</button>
 
-            <button class="photo" id="photoButton" type="button" aria-label="Add photo" title="Add photo">🖼️</button>
+            <textarea id="userInput" placeholder="Message Krishti AI..."
+                      aria-label="Message" maxlength="10000" rows="1"></textarea>
 
-            <textarea id="userInput" placeholder="Message Krishti AI..." aria-label="Message" maxlength="10000" rows="1"></textarea>
+            <button class="voice" id="voiceButton" type="button"
+                    aria-label="Voice input" title="Voice input">🎤</button>
 
-            <button class="voice" id="voiceButton" type="button" aria-label="Voice input" title="Voice input">🎤</button>
-
-            <button class="send" id="sendButton" type="submit" aria-label="Send message" title="Send message">➤</button>
+            <button class="send" id="sendButton" type="submit"
+                    aria-label="Send message" title="Send message">➤</button>
         </form>
 
         <div class="composer-hint">Krishti AI can make mistakes. Check important information.</div>
+
+        <!-- ChatGPT-style compact attachment menu -->
+        <div id="attachMenu" class="attach-menu" hidden>
+            <button type="button" data-attach-action="camera">
+                <span class="attach-menu-icon">📷</span>
+                <span>Camera</span>
+            </button>
+            <button type="button" data-attach-action="photos">
+                <span class="attach-menu-icon">🖼️</span>
+                <span>Photos</span>
+            </button>
+            <button type="button" data-attach-action="files">
+                <span class="attach-menu-icon">📎</span>
+                <span>Files</span>
+            </button>
+        </div>
     </div>
 
-<div id="toast" class="toast" role="status" aria-live="polite"></div>
+<div id="toast" class="toast" role="status" aria-live="polite"> class="toast" role="status" aria-live="polite"></div>
 
 </main>
 
