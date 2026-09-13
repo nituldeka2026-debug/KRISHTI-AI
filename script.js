@@ -1597,7 +1597,11 @@ function closeSidebar() {
     sidebarEl?.classList.remove("open");
     sidebarOverlay?.classList.remove("show");
 }
-sidebarToggle?.addEventListener("click", openSidebar);
+sidebarToggle?.addEventListener("click", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    openSidebar();
+});
 sidebarClose?.addEventListener("click", closeSidebar);
 sidebarOverlay?.addEventListener("click", closeSidebar);
 mobileNewChat?.addEventListener("click", () => { startFreshChat(true); closeSidebar(); });

@@ -1715,3 +1715,28 @@ body{background:var(--krishti-bg)}
 .attachment-menu button[data-attach="web"] {
     border-color: color-mix(in srgb, var(--krishti-accent, #6d5dfc) 38%, transparent);
 }
+
+
+/* V12.1 MOBILE SIDEBAR FIX */
+@media (max-width:700px){
+  .sidebar{
+    position:fixed!important;
+    left:0!important; top:0!important; bottom:0!important;
+    height:100dvh!important;
+    width:min(318px,88vw)!important;
+    z-index:3000!important;
+    transform:translateX(-105%)!important;
+    transition:transform .22s ease!important;
+    visibility:visible!important;
+  }
+  .sidebar.open{transform:translateX(0)!important}
+  .sidebar-overlay{
+    position:fixed!important; inset:0!important;
+    z-index:2999!important;
+    display:block!important; opacity:0; pointer-events:none;
+  }
+  .sidebar-overlay.show{opacity:1!important;pointer-events:auto!important}
+  .mobile-topbar-left{display:block!important;position:relative;z-index:3100}
+  #sidebarToggle{display:grid!important;place-items:center!important;cursor:pointer!important;
+    position:relative!important;z-index:3101!important}
+}
