@@ -1740,3 +1740,21 @@ body{background:var(--krishti-bg)}
   #sidebarToggle{display:grid!important;place-items:center!important;cursor:pointer!important;
     position:relative!important;z-index:3101!important}
 }
+
+/* V12.2 — Mobile sidebar visibility fix */
+@media (max-width:700px){
+  .sidebar{
+    display:flex !important;
+    visibility:visible !important;
+    opacity:1 !important;
+    position:fixed;
+    left:0;
+    top:0;
+    bottom:0;
+    height:100dvh;
+    z-index:1000;
+    transform:translateX(-105%);
+  }
+  .sidebar.open{transform:translateX(0) !important;}
+  .sidebar-overlay.show{z-index:999;}
+}
