@@ -653,6 +653,39 @@ async function sendMessage(customMessage = null) {
         welcomeSection.style.display = "none";
     }
 
+    // Text -> image / Past / Future generation mode.
+    if (!hasImage && imageGenerateMode) {
+        const prompt = message;
+        if (!prompt) return;
+        addMessage(prompt, "user");
+        if (userInput) { userInput.value = ""; autoResizeInput(); }
+        const mode = imageGenerateMode;
+        imageGenerateMode = "";
+        const typing = showTyping();
+        setSendingState(true);
+        try {
+            const response = await fetch("/api/image-generate", {
+                method: "POST", headers: {"Content-Type":"application/json"},
+                body: JSON.stringify({prompt, era: mode})
+            });
+            if (typing) typing.remove();
+            let data = null; try { data = await response.json(); } catch (_) {}
+            if (!response.ok || !data?.success) {
+                addMessage((data && data.error) || "Krishti could not generate the image.", "ai");
+                return;
+            }
+            addImageMessage(data.image, data.mimeType || "image/png");
+        } catch (error) {
+            console.error("Image generation error:", error);
+            if (typing) typing.remove();
+            addMessage("Connection error while generating the image. Please try again.", "ai");
+        } finally {
+            setSendingState(false);
+            if (userInput) userInput.focus();
+        }
+        return;
+    }
+
     // Image + prompt uses the image editing endpoint.
     if (hasImage) {
         const image = selectedImage;
@@ -1485,6 +1518,7 @@ sidebarItems.forEach(
 const attachmentMenu = document.getElementById("attachmentMenu");
 const modeIndicator = document.getElementById("modeIndicator");
 let webSearchMode = false;
+let imageGenerateMode = "";
 
 function setWebSearchMode(enabled) {
     webSearchMode = !!enabled;
@@ -1531,8 +1565,20 @@ if (attachmentMenu) {
             if (!isSending && documentInput) documentInput.click();
         } else if (action === "web") {
             setWebSearchMode(true);
+            imageGenerateMode = "";
             showToast("Web Search mode enabled. Ask Krishti for current information.");
             if (userInput) userInput.focus();
+        } else if (action === "generate" || action === "past" || action === "future") {
+            imageGenerateMode = action === "past" ? "past" : action === "future" ? "future" : "generate";
+            setWebSearchMode(false);
+            if (modeIndicator) {
+                modeIndicator.hidden = false;
+                modeIndicator.textContent = action === "past" ? "⏪ Past Photo mode" : action === "future" ? "⏩ Future Photo mode" : "✨ Create Image mode";
+            }
+            if (userInput) {
+                userInput.placeholder = action === "past" ? "Describe the past photo..." : action === "future" ? "Describe the future photo..." : "Describe the image to create...";
+                userInput.focus();
+            }
         } else if (action === "plugins") {
             showToast("Plugins panel is ready for connected tools.");
         } else if (action === "think") {

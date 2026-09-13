@@ -506,6 +506,42 @@ async function handleImageEdit(req, res) {
     }
 }
 
+
+/* =========================================================
+   TEXT -> IMAGE + PAST/FUTURE IMAGE API
+========================================================= */
+
+async function handleImageGenerate(req, res) {
+    try {
+        const body = await readRequestBody(req);
+        let data;
+        try { data = JSON.parse(body); }
+        catch (_) { return sendJSON(res, 400, { success:false, error:"Invalid JSON request." }); }
+        const prompt = typeof data.prompt === "string" ? data.prompt.trim() : "";
+        const era = typeof data.era === "string" ? data.era.trim().toLowerCase() : "none";
+        if (!GEMINI_API_KEY) return sendJSON(res,500,{success:false,error:"Gemini API key is not configured on the server."});
+        if (!prompt) return sendJSON(res,400,{success:false,error:"Please describe the image you want Krishti to create."});
+        const eraInstruction = era === "past"
+            ? "Transform the concept into a believable past-era photograph. Use historically appropriate clothing, architecture, objects, film grain, lighting and camera characteristics."
+            : era === "future"
+            ? "Transform the concept into a believable future-era photograph. Use advanced but coherent technology, architecture, clothing, lighting and cinematic realism."
+            : "Create the requested image naturally and coherently.";
+        const ai = new GoogleGenAI({apiKey:GEMINI_API_KEY});
+        const response = await ai.models.generateContent({
+            model: IMAGE_EDIT_MODEL,
+            contents: [{text:`You are Krishti AI Image Studio. ${eraInstruction}\n\nUSER PROMPT:\n${prompt}\n\nReturn image only. No captions, labels, logos or watermarks unless requested.`}],
+            config: {responseModalities:["IMAGE"]}
+        });
+        const parts = response?.candidates?.[0]?.content?.parts || [];
+        const imagePart = parts.find(part => part?.inlineData?.data);
+        if (!imagePart) throw new Error("The image model did not return an image.");
+        return sendJSON(res,200,{success:true,image:imagePart.inlineData.data,mimeType:imagePart.inlineData.mimeType||"image/png"});
+    } catch(error) {
+        console.error("Image generation API error:",error);
+        return sendJSON(res,500,{success:false,error:getGeminiErrorMessage(error)});
+    }
+}
+
 /* =========================================================
    WEB SEARCH API
 ========================================================= */
