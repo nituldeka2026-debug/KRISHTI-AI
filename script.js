@@ -4,12 +4,12 @@
 // Replace these values with your Firebase Web App config.
 // Firebase Console -> Project settings -> Your apps -> Web app.
 const FIREBASE_CONFIG = {
-    apiKey: "YOUR_FIREBASE_API_KEY",
-    authDomain: "YOUR_PROJECT.firebaseapp.com",
-    projectId: "YOUR_PROJECT_ID",
-    storageBucket: "YOUR_PROJECT.firebasestorage.app",
-    messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
-    appId: "YOUR_FIREBASE_APP_ID"
+    apiKey: "AIzaSyBv2id8Z1Hgl-XpZ7vLI2PCj8RBHei4aLI",
+    authDomain: "krishti-ai.firebaseapp.com",
+    projectId: "krishti-ai",
+    storageBucket: "krishti-ai.firebasestorage.app",
+    messagingSenderId: "310942594582",
+    appId: "1:310942594582:web:c46a9a49595d7c54e52737"
 };
 
 const authScreen = document.getElementById("authScreen");
@@ -54,6 +54,65 @@ function friendlyAuthError(error) {
     };
     return map[error?.code] || error?.message || "Authentication failed. Please try again.";
 }
+
+let recaptchaVerifier = null;
+let phoneConfirmationResult = null;
+
+function setupRecaptcha() {
+    if (!firebaseConfigured() || recaptchaVerifier) return;
+    recaptchaVerifier = new firebase.auth.RecaptchaVerifier("recaptcha-container", {
+        size: "invisible",
+        callback: () => {}
+    });
+    recaptchaVerifier.render().catch(() => {});
+}
+
+async function sendPhoneOTP() {
+    if (!firebaseConfigured()) {
+        showToast("Firebase login is not configured.");
+        return;
+    }
+    const phone = (document.getElementById("phone-number")?.value || "").trim();
+    if (!/^\+\d{8,15}$/.test(phone)) {
+        showToast("Enter phone number with country code, e.g. +919876543210");
+        return;
+    }
+    try {
+        setupRecaptcha();
+        phoneConfirmationResult =
+            await firebaseAuth.signInWithPhoneNumber(phone, recaptchaVerifier);
+        document.getElementById("phone-otp-section")?.classList.remove("hidden");
+        showToast("OTP sent successfully.");
+    } catch (error) {
+        console.error(error);
+        if (recaptchaVerifier) {
+            try { recaptchaVerifier.clear(); } catch {}
+            recaptchaVerifier = null;
+        }
+        showToast(mapFirebaseError(error));
+    }
+}
+
+async function verifyPhoneOTP() {
+    const otp = (document.getElementById("phone-otp")?.value || "").trim();
+    if (!phoneConfirmationResult) {
+        showToast("First request an OTP.");
+        return;
+    }
+    if (!/^\d{6}$/.test(otp)) {
+        showToast("Enter the 6-digit OTP.");
+        return;
+    }
+    try {
+        await phoneConfirmationResult.confirm(otp);
+        phoneConfirmationResult = null;
+        showToast("Phone login successful.");
+    } catch (error) {
+        console.error(error);
+        showToast(mapFirebaseError(error));
+    }
+}
+
 function firebaseConfigured() {
     return window.firebase && FIREBASE_CONFIG.apiKey && !FIREBASE_CONFIG.apiKey.startsWith("YOUR_") && FIREBASE_CONFIG.projectId && !FIREBASE_CONFIG.projectId.startsWith("YOUR_");
 }
@@ -1385,3 +1444,6 @@ console.log(
 console.log(
     "Photo upload + natural language image editing enabled."
 );
+
+window.sendPhoneOTP = sendPhoneOTP;
+window.verifyPhoneOTP = verifyPhoneOTP;

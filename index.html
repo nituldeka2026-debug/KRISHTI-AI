@@ -28,7 +28,22 @@
     </form>
     <div class="auth-divider"><span>OR</span></div>
     <button id="googleLoginButton" class="google-button" type="button"><span class="google-g">G</span> Continue with Google</button>
-    <div class="auth-links"><button id="authModeButton" type="button">Create an account</button><button id="forgotPasswordButton" type="button">Forgot password?</button></div>
+    
+<div class="phone-login">
+    <div class="auth-divider"><span>OR</span></div>
+    <label for="phone-number">Mobile number</label>
+    <input id="phone-number" type="tel" inputmode="tel"
+           placeholder="+91 9876543210" autocomplete="tel">
+    <button type="button" class="auth-button secondary" onclick="sendPhoneOTP()">📱 Send OTP</button>
+    <div id="phone-otp-section" class="hidden">
+        <label for="phone-otp">6-digit OTP</label>
+        <input id="phone-otp" type="text" inputmode="numeric" maxlength="6"
+               placeholder="Enter OTP" autocomplete="one-time-code">
+        <button type="button" class="auth-button" onclick="verifyPhoneOTP()">Verify &amp; Login</button>
+    </div>
+    <div id="recaptcha-container"></div>
+</div>
+<div class="auth-links"><button id="authModeButton" type="button">Create an account</button><button id="forgotPasswordButton" type="button">Forgot password?</button></div>
     <p class="auth-note">By continuing, you agree to use Krishti AI responsibly.</p>
   </div>
 </div>

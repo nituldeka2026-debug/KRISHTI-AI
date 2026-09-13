@@ -56,3 +56,14 @@ V7 adds real Firebase Authentication with:
 The Firebase web config is not a password or Gemini API key. Keep `GEMINI_API_KEY` only on the server/Render environment.
 
 Note: this V7 keeps chat history in the user's browser, namespaced by Firebase UID. Cloud-synced history/database is the next phase.
+
+
+## Firebase Console steps still required
+1. Authentication -> Sign-in method -> enable **Email/Password**.
+2. Enable **Google** sign-in.
+3. Authentication -> Settings -> Authorized domains -> add your deployed Render domain if it is not already listed.
+4. Do not enable billing just for these authentication methods.
+
+
+### Phone OTP login
+Phone provider must be enabled in Firebase Authentication > Sign-in method. Test phone numbers are optional for development; real phone numbers can be used for OTP subject to Firebase limits.
