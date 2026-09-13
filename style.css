@@ -1582,7 +1582,7 @@ body {
 }
 
 /* =========================================================
-   V10.7 — CHATGPT-LIKE SETTINGS / MORE / ACCOUNT UI
+   KRISHTI SIGNATURE UI — CUSTOM BRANDING
    ========================================================= */
 .quick-actions{display:none!important}
 .welcome{padding-bottom:190px}
@@ -1647,3 +1647,40 @@ body {
   .settings-nav-top{padding-bottom:12px}
   .profile-menu{left:10px;right:10px;bottom:72px;width:auto}
 }
+
+
+/* =========================================================
+   KRISHTI SIGNATURE THEME OVERRIDES
+   ========================================================= */
+:root{--krishti-accent:#8b5cf6;--krishti-accent-2:#14b8a6;--krishti-bg:#080b14;--krishti-panel:#101522;--krishti-line:#252d40}
+body{background:var(--krishti-bg)}
+.sidebar{background:linear-gradient(180deg,#0b0e18 0%,#0a0d16 58%,#0c101c 100%);border-right:1px solid #20283a}
+.sidebar-brand{padding:5px 8px 18px}
+.sidebar-brand-name{gap:10px;color:#f7f8fc;letter-spacing:-.2px}
+.sidebar-brand-name>span:last-child{display:flex;flex-direction:column;line-height:1.05}
+.sidebar-brand-name b{font-size:15px;font-weight:750;letter-spacing:.1px}
+.sidebar-brand-name small{font-size:9px;color:#7f8aa1;font-weight:600;letter-spacing:1.4px;text-transform:uppercase;margin-top:4px}
+.krishti-mark,.hero-mark{display:grid;place-items:center;font-weight:850;color:white;background:linear-gradient(135deg,var(--krishti-accent),var(--krishti-accent-2));box-shadow:0 8px 24px rgba(139,92,246,.2)}
+.krishti-mark{width:34px;height:34px;border-radius:11px;font-size:17px}
+.topbar-avatar{display:grid!important;place-items:center;background:linear-gradient(135deg,var(--krishti-accent),var(--krishti-accent-2))!important;color:#fff;font-weight:800;border-radius:10px!important}
+.hero-mark{width:68px;height:68px;border-radius:22px;font-size:31px;box-shadow:0 16px 42px rgba(20,184,166,.15),0 12px 34px rgba(139,92,246,.2)}
+.robot{background:transparent!important;box-shadow:none!important}
+.new-chat{background:linear-gradient(135deg,rgba(139,92,246,.16),rgba(20,184,166,.09));border:1px solid rgba(139,92,246,.22)}
+.new-chat:hover{background:linear-gradient(135deg,rgba(139,92,246,.24),rgba(20,184,166,.14));border-color:rgba(139,92,246,.4)}
+.sidebar-nav-item.active,.sidebar-nav-item:hover{background:#171d2b;color:#fff}
+.nav-icon{color:#9b8cf7}
+.nav-badge{background:rgba(20,184,166,.12);color:#53d8c5;border:1px solid rgba(20,184,166,.2)}
+.chat-history-list .history-item:hover{background:#151b28}
+.chat-history-list .history-item.active{background:#181f2d;border-left-color:var(--krishti-accent)}
+.profile-avatar{background:linear-gradient(135deg,var(--krishti-accent),var(--krishti-accent-2))}
+.settings-view{background:radial-gradient(circle at 75% 0%,rgba(139,92,246,.08),transparent 28%),#080b14}
+.settings-nav{background:#0c101a;border-right-color:#222b3e}
+.settings-nav-top strong{font-weight:750}
+.settings-nav-item.active{background:linear-gradient(90deg,rgba(139,92,246,.2),rgba(20,184,166,.06));color:#fff;border-left:2px solid var(--krishti-accent)}
+.switch input:checked+span{background:linear-gradient(90deg,var(--krishti-accent),var(--krishti-accent-2))}
+.input-area{border-color:#2a3347!important;box-shadow:0 10px 36px rgba(0,0,0,.22)}
+.send{background:linear-gradient(135deg,var(--krishti-accent),var(--krishti-accent-2))!important}
+.composer-hint{color:#66728a}
+
+/* Rename product-copy that previously referenced another assistant style. */
+.settings-panel h1{letter-spacing:-.6px}

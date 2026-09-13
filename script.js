@@ -1448,7 +1448,7 @@ sidebarItems.forEach(
 
 
 // =========================================================
-// CHATGPT-STYLE V10.5 UI CONTROLS
+// KRISHTI UI CONTROLS
 // =========================================================
 const attachmentMenu = document.getElementById("attachmentMenu");
 const sidebarEl = document.getElementById("sidebar");
@@ -1530,7 +1530,7 @@ window.verifyPhoneOTP = verifyPhoneOTP;
 // =========================================================
 // V10.7 — SETTINGS / PROFILE / MORE
 // =========================================================
-(function initChatGPTStyleControls(){
+(function initKrishtiStyleControls(){
     const moreButton = Array.from(document.querySelectorAll('.sidebar-nav-item')).find(el => el.textContent.trim().includes('More'));
     const moreMenu = document.getElementById('moreMenu');
     const settingsView = document.getElementById('settingsView');
@@ -1619,7 +1619,7 @@ window.verifyPhoneOTP = verifyPhoneOTP;
             'Storage': `<h1>Storage</h1><p>Local storage used by this browser.</p><div class="setting-card"><div class="setting-row"><div class="setting-row-main"><strong>Chat history</strong><span>Chats are saved locally for this account in this browser.</span></div><button class="setting-button danger" type="button" id="clearHistoryButton">Clear</button></div></div>`,
             'Data controls': `<h1>Data controls</h1><p>Control local data kept by Krishti AI.</p><div class="setting-card"><div class="setting-row"><div class="setting-row-main"><strong>Local chat history</strong><span>Keep your recent conversations on this device.</span></div><label class="switch"><input id="dataHistorySwitch" type="checkbox" checked><span></span></label></div></div>`,
             'Report bug': `<h1>Report bug</h1><p>Tell the developer what went wrong.</p><div class="setting-card"><div class="setting-row"><div class="setting-row-main"><strong>Bug report</strong><span>Use the feedback channel available in your deployment.</span></div><button class="setting-button" type="button" data-demo="Report bug">Report</button></div></div>`,
-            'About': `<h1>About Krishti AI</h1><p>Your custom AI assistant interface.</p><div class="setting-card"><div class="setting-row"><div class="setting-row-main"><strong>Version</strong><span>ChatGPT-style UI build</span></div><span class="setting-value">V10.7</span></div><div class="setting-row"><div class="setting-row-main"><strong>Backend</strong><span>Existing Krishti AI backend is preserved.</span></div><span class="setting-value">Connected</span></div></div>`,
+            'About': `<h1>About Krishti AI</h1><p>Your custom AI assistant interface.</p><div class="setting-card"><div class="setting-row"><div class="setting-row-main"><strong>Version</strong><span>Krishti signature interface</span></div><span class="setting-value">V10.7</span></div><div class="setting-row"><div class="setting-row-main"><strong>Backend</strong><span>Existing Krishti AI backend is preserved.</span></div><span class="setting-value">Connected</span></div></div>`,
             'Log out': `<h1>Log out</h1><p>End your current Krishti AI session.</p><div class="setting-card"><div class="setting-row"><div class="setting-row-main"><strong>Log out of Krishti AI</strong><span>You can sign in again at any time.</span></div><button class="setting-button danger" type="button" id="settingsLogout">Log out</button></div></div>`
         };
         return `<div class="settings-panel">${data[section] || data.General}</div>`;
