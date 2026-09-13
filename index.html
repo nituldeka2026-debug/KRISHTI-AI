@@ -73,6 +73,11 @@
       <button class="sidebar-nav-item" type="button"><span class="nav-icon">□</span><span>Projects</span></button>
       <button class="sidebar-nav-item" type="button"><span class="nav-icon">◇</span><span>Codex</span></button>
       <button class="sidebar-nav-item" type="button"><span class="nav-icon more-dots">•••</span><span>More</span></button>
+      <div class="more-menu" id="moreMenu" hidden>
+        <button type="button" data-more="Tasks">✓ Tasks</button>
+        <button type="button" data-more="Help & FAQ">? Help & FAQ</button>
+        <button type="button" data-more="Keyboard shortcuts">⌨ Keyboard shortcuts</button>
+      </div>
     </nav>
 
     <div class="chat-history-panel">
@@ -138,40 +143,6 @@
         </p>
 
 
-        <div class="quick-actions">
-
-            <button
-                type="button"
-                data-prompt="Write a professional JavaScript code example for me."
-            >
-                💻 Write Code
-            </button>
-
-
-            <button
-                type="button"
-                data-prompt="Explain how to analyse and understand a document."
-            >
-                📄 Analyse Document
-            </button>
-
-
-            <button
-                type="button"
-                data-prompt="Help me find information about a topic and explain what I should search for."
-            >
-                🌐 Search Web
-            </button>
-
-
-            <button
-                type="button"
-                data-prompt="Give me some useful and creative ideas."
-            >
-                💡 Get Ideas
-            </button>
-
-        </div>
 
     </section>
 
@@ -237,6 +208,46 @@
 
         <div class="composer-hint">Krishti AI can make mistakes. Check important information.</div>
     </div>
+
+<section id="settingsView" class="settings-view" hidden aria-label="Settings">
+  <div class="settings-shell">
+    <aside class="settings-nav">
+      <div class="settings-nav-top"><button id="settingsBack" type="button" class="settings-back">←</button><strong>Settings</strong></div>
+      <button class="settings-nav-item active" data-setting-section="General">General</button>
+      <button class="settings-nav-item" data-setting-section="Personalization">Personalization</button>
+      <button class="settings-nav-item" data-setting-section="Memory">Memory</button>
+      <button class="settings-nav-item" data-setting-section="Plugins">Plugins</button>
+      <button class="settings-nav-item" data-setting-section="Workspace">Workspace</button>
+      <button class="settings-nav-item" data-setting-section="Usage & limits">Usage & limits</button>
+      <button class="settings-nav-item" data-setting-section="Trusted contact">Trusted contact</button>
+      <button class="settings-nav-item" data-setting-section="Parental controls">Parental controls</button>
+      <div class="settings-nav-divider"></div>
+      <button class="settings-nav-item" data-setting-section="Appearance">Appearance</button>
+      <button class="settings-nav-item" data-setting-section="Accent color">Accent color</button>
+      <button class="settings-nav-item" data-setting-section="Notifications">Notifications</button>
+      <button class="settings-nav-item" data-setting-section="Voice">Voice</button>
+      <button class="settings-nav-item" data-setting-section="Safety">Safety</button>
+      <button class="settings-nav-item" data-setting-section="Security & login">Security & login</button>
+      <button class="settings-nav-item" data-setting-section="Storage">Storage</button>
+      <button class="settings-nav-item" data-setting-section="Data controls">Data controls</button>
+      <div class="settings-nav-divider"></div>
+      <button class="settings-nav-item" data-setting-section="Report bug">Report bug</button>
+      <button class="settings-nav-item" data-setting-section="About">About</button>
+      <button class="settings-nav-item danger" data-setting-section="Log out">Log out</button>
+    </aside>
+    <main class="settings-content">
+      <div class="settings-mobile-head"><button id="settingsMobileBack" type="button">←</button><span>Settings</span></div>
+      <div id="settingsContent"></div>
+    </main>
+  </div>
+</section>
+
+<div id="profileMenu" class="profile-menu" hidden>
+  <div class="profile-menu-title">Krishti AI</div>
+  <div id="profileMenuEmail" class="profile-menu-email">Signed in</div>
+  <button type="button" id="profileSettings">⚙ Settings</button>
+  <button type="button" id="profileLogout">↪ Log out</button>
+</div>
 
 <div id="toast" class="toast" role="status" aria-live="polite"></div>
 

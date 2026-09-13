@@ -1580,3 +1580,70 @@ body {
   .sidebar-brand { height:48px; }
   .chat-history-list { max-height:36vh; }
 }
+
+/* =========================================================
+   V10.7 — CHATGPT-LIKE SETTINGS / MORE / ACCOUNT UI
+   ========================================================= */
+.quick-actions{display:none!important}
+.welcome{padding-bottom:190px}
+.more-menu{margin:2px 0 4px 0;padding:5px;border:1px solid #2b3343;background:#171d2a;border-radius:12px;box-shadow:0 18px 45px rgba(0,0,0,.35)}
+.more-menu[hidden]{display:none}
+.more-menu button{display:block;width:100%;border:0;background:transparent;color:#c8cfdb;text-align:left;padding:9px 11px;border-radius:8px;font-size:13px;cursor:pointer}
+.more-menu button:hover{background:#232b3c;color:#fff}
+
+.settings-view{position:fixed;inset:0;z-index:200;background:#0b0f19;color:#edf1f7;overflow:hidden}
+.settings-view[hidden]{display:none}
+.settings-shell{height:100%;display:flex;max-width:1180px;margin:0 auto}
+.settings-nav{width:285px;flex:0 0 285px;padding:22px 14px 18px;border-right:1px solid #272e3b;overflow:auto;background:#10141f}
+.settings-nav-top{display:flex;align-items:center;gap:10px;padding:0 5px 20px;font-size:18px}
+.settings-back{width:36px;height:36px;border:0;border-radius:9px;background:#1b2230;color:#dce2ec;font-size:19px;cursor:pointer}
+.settings-nav-item{width:100%;border:0;background:transparent;color:#aeb8c8;text-align:left;padding:10px 12px;border-radius:9px;font-size:13px;cursor:pointer;margin:1px 0}
+.settings-nav-item:hover{background:#1b2230;color:#fff}
+.settings-nav-item.active{background:#252d3d;color:#fff;font-weight:600}
+.settings-nav-item.danger{color:#f18d98}
+.settings-nav-divider{height:1px;background:#252c3a;margin:9px 4px}
+.settings-content{flex:1;overflow:auto;padding:42px clamp(22px,5vw,72px) 70px}
+.settings-mobile-head{display:none}
+.settings-panel{max-width:720px;margin:0 auto}
+.settings-panel h1{font-size:26px;margin:0 0 7px;letter-spacing:-.4px}
+.settings-panel>p{color:#8f9aae;margin:0 0 25px;font-size:13px;line-height:1.5}
+.setting-card{border:1px solid #293244;background:#121824;border-radius:14px;overflow:hidden;margin-bottom:16px}
+.setting-row{display:flex;align-items:center;gap:14px;min-height:62px;padding:13px 16px;border-bottom:1px solid #252d3b}
+.setting-row:last-child{border-bottom:0}
+.setting-row-main{min-width:0;flex:1}
+.setting-row-main strong{display:block;font-size:13px;color:#edf1f7;margin-bottom:4px}
+.setting-row-main span{display:block;color:#8995a9;font-size:11px;line-height:1.45}
+.setting-value{color:#929db0;font-size:12px}
+.setting-button{border:1px solid #39455a;background:#1d2636;color:#eef2f8;border-radius:9px;padding:8px 11px;cursor:pointer;font-size:12px}
+.setting-button:hover{background:#263148}
+.setting-button.danger{color:#ff9aa3;border-color:#63343b;background:#25171b}
+.switch{position:relative;width:43px;height:24px;flex:0 0 43px}
+.switch input{opacity:0;width:0;height:0}
+.switch span{position:absolute;inset:0;background:#343d4e;border-radius:99px;cursor:pointer;transition:.2s}
+.switch span:before{content:"";position:absolute;width:18px;height:18px;left:3px;top:3px;background:#fff;border-radius:50%;transition:.2s}
+.switch input:checked+span{background:#6d5dfc}
+.switch input:checked+span:before{transform:translateX(19px)}
+.accent-options{display:flex;gap:9px}
+.accent-dot{width:25px;height:25px;border-radius:50%;border:2px solid transparent;cursor:pointer;box-shadow:inset 0 0 0 1px #fff3}
+.accent-dot.active{border-color:#fff}
+.profile-menu{position:fixed;z-index:220;left:18px;bottom:74px;width:250px;padding:10px;border:1px solid #30384a;background:#171d2a;border-radius:14px;box-shadow:0 22px 60px rgba(0,0,0,.55)}
+.profile-menu[hidden]{display:none}
+.profile-menu-title{font-weight:700;font-size:13px;padding:6px 8px 2px}
+.profile-menu-email{font-size:11px;color:#8490a4;padding:0 8px 9px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.profile-menu button{display:block;width:100%;border:0;background:transparent;color:#c8d0de;text-align:left;padding:10px 8px;border-radius:9px;cursor:pointer;font-size:13px}
+.profile-menu button:hover{background:#222b3c;color:#fff}
+.profile-menu #profileLogout{color:#f29aa3}
+
+@media (max-width:700px){
+  .settings-shell{display:block}
+  .settings-nav{width:100%;height:100%;border-right:0;padding:12px 10px 28px}
+  .settings-content{display:none;padding:0 16px 40px}
+  .settings-content.mobile-active{display:block;height:100%}
+  .settings-content.mobile-active .settings-mobile-head{display:flex}
+  .settings-mobile-head{height:58px;align-items:center;gap:12px;border-bottom:1px solid #252c3a;position:sticky;top:0;background:#0b0f19;z-index:2;font-weight:650}
+  .settings-mobile-head button{border:0;background:transparent;color:#dce2ec;font-size:22px}
+  .settings-mobile-head span{font-size:16px}
+  .settings-content.mobile-active .settings-panel{padding-top:22px}
+  .settings-nav-top{padding-bottom:12px}
+  .profile-menu{left:10px;right:10px;bottom:72px;width:auto}
+}
