@@ -67,3 +67,6 @@ Note: this V7 keeps chat history in the user's browser, namespaced by Firebase U
 
 ### Phone OTP login
 Phone provider must be enabled in Firebase Authentication > Sign-in method. Test phone numbers are optional for development; real phone numbers can be used for OTP subject to Firebase limits.
+
+## V10 Sidebar Update
+The V10 polished build now uses a ChatGPT-inspired left navigation layout: brand/header tools, New chat, Images, Library, Scheduled, Plugins, Projects, Codex, More, Recents, profile area and Settings. The existing app IDs and backend endpoints are preserved.

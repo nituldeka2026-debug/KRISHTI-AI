@@ -52,57 +52,44 @@
 =============================== -->
 
 <aside class="sidebar" id="sidebar">
-
-    <div class="sidebar-header">
-      <div class="logo">🤖 <span>Krishti AI</span></div>
-      <button class="sidebar-close" id="sidebarClose" type="button" aria-label="Close menu">×</button>
+  <div class="sidebar-top">
+    <div class="sidebar-brand">
+      <div class="sidebar-brand-name">🤖 <span>Krishti AI</span></div>
+      <div class="sidebar-tools">
+        <button type="button" class="sidebar-tool" id="historySearchButton" title="Search chats" aria-label="Search chats">⌕</button>
+        <button type="button" class="sidebar-tool" id="sidebarCollapse" title="Collapse sidebar" aria-label="Collapse sidebar">◧</button>
+      </div>
     </div>
 
-    <button
-        class="new-chat"
-        id="newChat"
-        type="button"
-    >
-        + New Chat
+    <button class="new-chat" id="newChat" type="button">
+      <span class="new-chat-icon">✎</span><span>New chat</span>
     </button>
 
+    <nav class="sidebar-nav" aria-label="Main navigation">
+      <button class="sidebar-nav-item" type="button"><span class="nav-icon">▧</span><span>Images</span><span class="nav-badge">UPDATED</span></button>
+      <button class="sidebar-nav-item" type="button"><span class="nav-icon">▥</span><span>Library</span></button>
+      <button class="sidebar-nav-item" type="button"><span class="nav-icon">◷</span><span>Scheduled</span></button>
+      <button class="sidebar-nav-item" type="button"><span class="nav-icon">◎</span><span>Plugins</span></button>
+      <button class="sidebar-nav-item" type="button"><span class="nav-icon">□</span><span>Projects</span></button>
+      <button class="sidebar-nav-item" type="button"><span class="nav-icon">◇</span><span>Codex</span></button>
+      <button class="sidebar-nav-item" type="button"><span class="nav-icon more-dots">•••</span><span>More</span></button>
+    </nav>
+
     <div class="chat-history-panel">
-        <div class="history-head">
-            <span>Recent chats</span>
-            <button type="button" id="historySearchButton" title="Search chats">⌕</button>
-        </div>
-        <input id="historySearch" class="history-search" type="search" placeholder="Search chats..." aria-label="Search chats" hidden>
-        <div id="chatHistoryList" class="chat-history-list"></div>
+      <div class="history-head"><span>Recents</span></div>
+      <input id="historySearch" class="history-search" type="search" placeholder="Search chats..." aria-label="Search chats" hidden>
+      <div id="chatHistoryList" class="chat-history-list"></div>
     </div>
+  </div>
 
-    <div class="menu">
-
-        <div class="menu-item">
-            💬 <span>Chats</span>
-        </div>
-
-        <div class="menu-item">
-            💻 <span>Developer</span>
-        </div>
-
-        <div class="menu-item" id="documentsMenu">
-            📄 <span>Documents</span>
-        </div>
-
-        <div class="menu-item" id="imagesMenu">
-            🖼️ <span>Images</span>
-        </div>
-
-        <div class="menu-item">
-            🌐 <span>Web Search</span>
-        </div>
-
+  <div class="sidebar-bottom">
+    <div class="profile-row">
+      <div class="profile-avatar">KA</div>
+      <div class="profile-info"><strong>Krishti AI</strong><span>Free plan</span></div>
+      <span class="profile-more">•••</span>
     </div>
-
-    <div class="sidebar-bottom">
-        <button type="button" class="settings-button" id="settingsButton">⚙️ Settings</button>
-    </div>
-
+    <button type="button" class="settings-button" id="settingsButton">⚙ Settings</button>
+  </div>
 </aside>
 
 
