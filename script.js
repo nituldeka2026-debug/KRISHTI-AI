@@ -225,23 +225,48 @@ const quickButtons =
 
 
 // =========================================================
-// ATTACHMENT ELEMENTS
+// DOCUMENT ELEMENTS
 // =========================================================
 
-const attachButton = document.getElementById("attachButton");
-const attachMenu = document.getElementById("attachMenu");
+const attachButton =
+    document.getElementById("attachButton");
 
-const documentInput = document.getElementById("documentInput");
-const imageInput = document.getElementById("imageInput");
-const cameraInput = document.getElementById("cameraInput");
+const documentInput =
+    document.getElementById("documentInput");
 
-const attachmentPreview = document.getElementById("attachmentPreview");
+const documentUploadArea =
+    document.getElementById("documentUploadArea");
 
-// Keep compatibility with the existing image-edit flow.
-const imageAttachment = null;
-const imagePreview = null;
-const imageName = null;
-const removeImageButton = null;
+const chooseDocument =
+    document.getElementById("chooseDocument");
+
+const selectedDocument =
+    document.getElementById("selectedDocument");
+
+
+const photoButton =
+    document.getElementById("photoButton");
+
+const imageInput =
+    document.getElementById("imageInput");
+
+const imageAttachment =
+    document.getElementById("imageAttachment");
+
+const imagePreview =
+    document.getElementById("imagePreview");
+
+const imageName =
+    document.getElementById("imageName");
+
+const removeImageButton =
+    document.getElementById("removeImage");
+
+const fileAttachment = document.getElementById("fileAttachment");
+const fileAttachmentName = document.getElementById("fileAttachmentName");
+const fileAttachmentMeta = document.getElementById("fileAttachmentMeta");
+const removeFileAttachmentButton = document.getElementById("removeFileAttachment");
+
 
 // =========================================================
 // STATE
@@ -596,8 +621,8 @@ function setSendingState(state) {
         attachButton.disabled = state;
     }
 
-    if (attachButton) {
-        attachButton.disabled = state;
+    if (photoButton) {
+        photoButton.disabled = state;
     }
 }
 
@@ -859,211 +884,97 @@ if (userInput) {
 
 
 // =========================================================
-// CHATGPT-STYLE ATTACHMENT MENU
+// PHOTO UPLOAD
 // =========================================================
 
-function closeAttachMenu() {
-    if (attachMenu) attachMenu.hidden = true;
-}
-
-function openAttachMenu() {
-    if (!attachMenu || isSending) return;
-    attachMenu.hidden = !attachMenu.hidden;
-}
-
-function clearAttachmentPreview() {
-    selectedFile = null;
-    selectedImage = null;
-
-    if (documentInput) documentInput.value = "";
-    if (imageInput) imageInput.value = "";
-    if (cameraInput) cameraInput.value = "";
-
-    if (attachmentPreview) {
-        attachmentPreview.innerHTML = "";
-        attachmentPreview.hidden = true;
-    }
-}
-
-function removeAttachment(type) {
-    if (type === "image") selectedImage = null;
-    if (type === "file") selectedFile = null;
-
-    if (imageInput) imageInput.value = "";
-    if (cameraInput) cameraInput.value = "";
-    if (documentInput) documentInput.value = "";
-
-    renderAttachmentPreview();
-}
-
-function renderAttachmentPreview() {
-    if (!attachmentPreview) return;
-
-    attachmentPreview.innerHTML = "";
-
-    const items = [];
-    if (selectedImage) items.push({ type: "image", file: selectedImage });
-    if (selectedFile) items.push({ type: "file", file: selectedFile });
-
-    if (!items.length) {
-        attachmentPreview.hidden = true;
-        return;
-    }
-
-    attachmentPreview.hidden = false;
-
-    items.forEach(({ type, file }) => {
-        const card = document.createElement("div");
-        card.className = "attachment-card";
-
-        const remove = document.createElement("button");
-        remove.type = "button";
-        remove.className = "attachment-remove";
-        remove.textContent = "×";
-        remove.title = "Remove";
-        remove.setAttribute("aria-label", "Remove attachment");
-        remove.addEventListener("click", () => removeAttachment(type));
-
-        if (type === "image") {
-            const img = document.createElement("img");
-            img.className = "attachment-thumb";
-            img.src = URL.createObjectURL(file);
-            img.alt = file.name || "Selected photo";
-            card.appendChild(img);
-        } else {
-            const icon = document.createElement("div");
-            icon.className = "attachment-file-icon";
-            icon.textContent = "📄";
-
-            const info = document.createElement("div");
-            info.className = "attachment-file-info";
-
-            const name = document.createElement("strong");
-            name.textContent = file.name;
-
-            const size = document.createElement("span");
-            size.textContent = `${file.type || "File"} • ${formatFileSize(file.size)}`;
-
-            info.append(name, size);
-            card.append(icon, info);
-        }
-
-        card.appendChild(remove);
-        attachmentPreview.appendChild(card);
+if (photoButton && imageInput) {
+    photoButton.addEventListener("click", () => {
+        if (!isSending) imageInput.click();
     });
 }
-
-function validateImage(file) {
-    const allowed = ["image/jpeg", "image/png", "image/webp"];
-    if (!allowed.includes(file.type)) {
-        addMessage("❌ Please choose a JPG, PNG or WEBP photo.", "ai");
-        return false;
-    }
-
-    if (file.size > 10 * 1024 * 1024) {
-        addMessage("❌ Photo is too large. Please choose an image under 10 MB.", "ai");
-        return false;
-    }
-
-    return true;
-}
-
-function selectImages(files) {
-    const file = files && files[0];
-    if (!file || isSending) return;
-
-    if (!validateImage(file)) {
-        if (imageInput) imageInput.value = "";
-        if (cameraInput) cameraInput.value = "";
-        return;
-    }
-
-    // Current backend supports one image per edit request.
-    selectedImage = file;
-    selectedFile = null;
-    renderAttachmentPreview();
-    closeAttachMenu();
-    userInput?.focus();
-}
-
-function selectDocument(file) {
-    if (!file || isSending) return;
-
-    if (file.size > 10 * 1024 * 1024) {
-        addMessage("❌ File is too large. Please select a file smaller than 10 MB.", "ai");
-        if (documentInput) documentInput.value = "";
-        return;
-    }
-
-    selectedFile = file;
-    selectedImage = null;
-    renderAttachmentPreview();
-    closeAttachMenu();
-    userInput?.focus();
-}
-
-if (attachButton) {
-    attachButton.addEventListener("click", event => {
-        event.stopPropagation();
-        openAttachMenu();
-    });
-}
-
-if (attachMenu) {
-    attachMenu.addEventListener("click", event => {
-        const button = event.target.closest("[data-attach-action]");
-        if (!button || isSending) return;
-
-        const action = button.dataset.attachAction;
-
-        if (action === "camera" && cameraInput) {
-            cameraInput.click();
-        } else if (action === "photos" && imageInput) {
-            imageInput.click();
-        } else if (action === "files" && documentInput) {
-            documentInput.click();
-        }
-    });
-}
-
-document.addEventListener("click", event => {
-    if (attachMenu && !attachMenu.hidden &&
-        !attachMenu.contains(event.target) &&
-        event.target !== attachButton) {
-        closeAttachMenu();
-    }
-});
 
 if (imageInput) {
     imageInput.addEventListener("change", event => {
-        selectImages(event.target.files);
+        const file = event.target.files && event.target.files[0];
+        if (!file) return;
+
+        const allowed = ["image/jpeg", "image/png", "image/webp"];
+        if (!allowed.includes(file.type)) {
+            addMessage("❌ Please choose a JPG, PNG or WEBP photo.", "ai");
+            imageInput.value = "";
+            return;
+        }
+
+        if (file.size > 10 * 1024 * 1024) {
+            addMessage("❌ Photo is too large. Please choose an image under 10 MB.", "ai");
+            imageInput.value = "";
+            return;
+        }
+
+        selectedImage = file;
+
+        if (imagePreview) {
+            imagePreview.src = URL.createObjectURL(file);
+        }
+        if (imageName) {
+            imageName.textContent = file.name;
+        }
+        if (imageAttachment) {
+            imageAttachment.hidden = false;
+        }
+        if (userInput) userInput.focus();
     });
 }
 
-if (cameraInput) {
-    cameraInput.addEventListener("change", event => {
-        selectImages(event.target.files);
-    });
-}
-
-if (documentInput) {
-    documentInput.addEventListener("change", event => {
-        selectDocument(event.target.files?.[0]);
-    });
+if (removeImageButton) {
+    removeImageButton.addEventListener("click", removeSelectedImage);
 }
 
 function removeSelectedImage() {
     selectedImage = null;
     if (imageInput) imageInput.value = "";
-    if (cameraInput) cameraInput.value = "";
-    renderAttachmentPreview();
+    if (imageAttachment) imageAttachment.hidden = true;
+    if (imagePreview) imagePreview.removeAttribute("src");
 }
 
-function removeSelectedDocument() {
-    selectedFile = null;
-    if (documentInput) documentInput.value = "";
-    renderAttachmentPreview();
+
+
+
+// =========================================================
+// CONVERT SELECTED FILE FOR GEMINI
+// =========================================================
+
+function fileToGeminiPayload(file) {
+
+    return new Promise((resolve, reject) => {
+
+        if (!file) {
+            resolve(null);
+            return;
+        }
+
+        const reader = new FileReader();
+
+        reader.onload = () => {
+            try {
+                const result = String(reader.result || "");
+                const comma = result.indexOf(",");
+
+                resolve({
+                    name: file.name,
+                    mimeType: file.type || "application/pdf",
+                    data: comma >= 0 ? result.slice(comma + 1) : result
+                });
+            } catch (error) {
+                reject(error);
+            }
+        };
+
+        reader.onerror = () => reject(reader.error || new Error("Could not read document."));
+        reader.readAsDataURL(file);
+    });
 }
+
 
 // =========================================================
 // QUICK ACTIONS
@@ -1190,6 +1101,12 @@ if (documentInput) {
             selectedFile =
                 file;
 
+            if (fileAttachment) {
+                fileAttachment.hidden = false;
+                if (fileAttachmentName) fileAttachmentName.textContent = file.name;
+                if (fileAttachmentMeta) fileAttachmentMeta.textContent = `${String(file.type || "File").split("/").pop().toUpperCase()} • ${formatFileSize(file.size)}`;
+            }
+            if (userInput) userInput.focus();
 
             // Show selected file
             if (selectedDocument) {
@@ -1265,6 +1182,13 @@ function removeSelectedDocument() {
         selectedDocument.innerHTML =
             "";
     }
+    if (fileAttachment) fileAttachment.hidden = true;
+    if (fileAttachmentName) fileAttachmentName.textContent = "Document";
+    if (fileAttachmentMeta) fileAttachmentMeta.textContent = "Ready to analyse";
+}
+
+if (removeFileAttachmentButton) {
+    removeFileAttachmentButton.addEventListener("click", removeSelectedDocument);
 }
 
 
@@ -1471,6 +1395,7 @@ sidebarItems.forEach(
                     item.textContent
                         .trim()
                         .toLowerCase();
+                if (window.innerWidth <= 700) closeSidebar?.();
 
 
                 if (
@@ -1520,6 +1445,66 @@ sidebarItems.forEach(
     }
 );
 
+
+
+// =========================================================
+// CHATGPT-STYLE V10.5 UI CONTROLS
+// =========================================================
+const attachmentMenu = document.getElementById("attachmentMenu");
+const sidebarEl = document.getElementById("sidebar");
+const sidebarToggle = document.getElementById("sidebarToggle");
+const sidebarClose = document.getElementById("sidebarClose");
+const sidebarOverlay = document.getElementById("sidebarOverlay");
+const mobileNewChat = document.getElementById("mobileNewChat");
+
+function closeAttachmentMenu() {
+    if (attachmentMenu) attachmentMenu.hidden = true;
+}
+function toggleAttachmentMenu() {
+    if (!attachmentMenu || isSending) return;
+    attachmentMenu.hidden = !attachmentMenu.hidden;
+}
+if (attachButton) {
+    attachButton.onclick = (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        toggleAttachmentMenu();
+    };
+}
+if (attachmentMenu) {
+    attachmentMenu.addEventListener("click", (event) => {
+        const button = event.target.closest("button[data-attach]");
+        if (!button) return;
+        const action = button.dataset.attach;
+        closeAttachmentMenu();
+        if (action === "camera") {
+            if (!isSending && imageInput) { imageInput.setAttribute("capture", "environment"); imageInput.click(); }
+        } else if (action === "photos") {
+            if (!isSending && imageInput) { imageInput.removeAttribute("capture"); imageInput.click(); }
+        } else if (action === "files") {
+            if (!isSending && documentInput) documentInput.click();
+        } else if (action === "plugins") {
+            showToast("Plugins panel is ready for connected tools.");
+        } else if (action === "think") {
+            showToast("Think harder mode selected.");
+        }
+    });
+}
+document.addEventListener("click", (event) => {
+    if (attachmentMenu && !attachmentMenu.hidden && !event.target.closest(".composer-wrap")) closeAttachmentMenu();
+});
+function openSidebar() {
+    sidebarEl?.classList.add("open");
+    sidebarOverlay?.classList.add("show");
+}
+function closeSidebar() {
+    sidebarEl?.classList.remove("open");
+    sidebarOverlay?.classList.remove("show");
+}
+sidebarToggle?.addEventListener("click", openSidebar);
+sidebarClose?.addEventListener("click", closeSidebar);
+sidebarOverlay?.addEventListener("click", closeSidebar);
+mobileNewChat?.addEventListener("click", () => { startFreshChat(true); closeSidebar(); });
 
 // =========================================================
 // STARTUP
