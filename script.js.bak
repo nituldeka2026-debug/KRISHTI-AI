@@ -1,142 +1,4 @@
 // =========================================================
-// KRISHTI AI V7 — FIREBASE AUTHENTICATION
-// =========================================================
-// Replace these values with your Firebase Web App config.
-// Firebase Console -> Project settings -> Your apps -> Web app.
-const FIREBASE_CONFIG = {
-    apiKey: "YOUR_FIREBASE_API_KEY",
-    authDomain: "YOUR_PROJECT.firebaseapp.com",
-    projectId: "YOUR_PROJECT_ID",
-    storageBucket: "YOUR_PROJECT.firebasestorage.app",
-    messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
-    appId: "YOUR_FIREBASE_APP_ID"
-};
-
-const authScreen = document.getElementById("authScreen");
-const appShell = document.getElementById("appShell");
-const emailAuthForm = document.getElementById("emailAuthForm");
-const authEmail = document.getElementById("authEmail");
-const authPassword = document.getElementById("authPassword");
-const emailLoginButton = document.getElementById("emailLoginButton");
-const googleLoginButton = document.getElementById("googleLoginButton");
-const authModeButton = document.getElementById("authModeButton");
-const forgotPasswordButton = document.getElementById("forgotPasswordButton");
-const togglePassword = document.getElementById("togglePassword");
-const authError = document.getElementById("authError");
-let authMode = "login";
-let firebaseAuth = null;
-
-function showAuthError(message) {
-    if (!authError) return;
-    authError.textContent = message;
-    authError.hidden = false;
-}
-function clearAuthError() { if (authError) authError.hidden = true; }
-function setAuthMode(mode) {
-    authMode = mode;
-    clearAuthError();
-    emailLoginButton.textContent = mode === "login" ? "Log in" : "Create account";
-    authModeButton.textContent = mode === "login" ? "Create an account" : "Already have an account? Log in";
-    forgotPasswordButton.hidden = mode !== "login";
-}
-function friendlyAuthError(error) {
-    const map = {
-        "auth/invalid-email": "Please enter a valid email address.",
-        "auth/user-not-found": "No account was found with this email.",
-        "auth/wrong-password": "Incorrect password.",
-        "auth/invalid-credential": "Email or password is incorrect.",
-        "auth/email-already-in-use": "An account already exists with this email.",
-        "auth/weak-password": "Password should be at least 6 characters.",
-        "auth/popup-closed-by-user": "Google sign-in was cancelled.",
-        "auth/popup-blocked": "Your browser blocked the Google sign-in popup.",
-        "auth/operation-not-allowed": "This sign-in method is not enabled in Firebase yet.",
-        "auth/too-many-requests": "Too many attempts. Please try again later."
-    };
-    return map[error?.code] || error?.message || "Authentication failed. Please try again.";
-}
-function firebaseConfigured() {
-    return window.firebase && FIREBASE_CONFIG.apiKey && !FIREBASE_CONFIG.apiKey.startsWith("YOUR_") && FIREBASE_CONFIG.projectId && !FIREBASE_CONFIG.projectId.startsWith("YOUR_");
-}
-function showApp(user) {
-    if (authScreen) authScreen.hidden = true;
-    if (appShell) appShell.hidden = false;
-    window.KRISHTI_USER = user;
-}
-function showAuth() {
-    if (appShell) appShell.hidden = true;
-    if (authScreen) authScreen.hidden = false;
-}
-function initAuth() {
-    if (!firebaseConfigured()) {
-        showAuthError("Firebase login is not configured yet. Add your Firebase Web App config in script.js.");
-        return;
-    }
-    try {
-        if (!firebase.apps.length) firebase.initializeApp(FIREBASE_CONFIG);
-        firebaseAuth = firebase.auth();
-        firebaseAuth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);
-        firebaseAuth.onAuthStateChanged(user => user ? showApp(user) : showAuth());
-    } catch (error) {
-        console.error(error);
-        showAuthError("Could not start login. Please check the Firebase configuration.");
-    }
-}
-emailAuthForm?.addEventListener("submit", async (event) => {
-    event.preventDefault(); clearAuthError();
-    if (!firebaseAuth) return showAuthError("Firebase login is not configured yet.");
-    const email = authEmail.value.trim(); const password = authPassword.value;
-    try {
-        emailLoginButton.disabled = true;
-        if (authMode === "login") await firebaseAuth.signInWithEmailAndPassword(email, password);
-        else await firebaseAuth.createUserWithEmailAndPassword(email, password);
-    } catch (error) { showAuthError(friendlyAuthError(error)); }
-    finally { emailLoginButton.disabled = false; }
-});
-
-googleLoginButton?.addEventListener("click", async () => {
-    clearAuthError();
-    if (!firebaseAuth) return showAuthError("Firebase login is not configured yet.");
-    try { await firebaseAuth.signInWithPopup(new firebase.auth.GoogleAuthProvider()); }
-    catch (error) { showAuthError(friendlyAuthError(error)); }
-});
-authModeButton?.addEventListener("click", () => setAuthMode(authMode === "login" ? "signup" : "login"));
-togglePassword?.addEventListener("click", () => { authPassword.type = authPassword.type === "password" ? "text" : "password"; });
-forgotPasswordButton?.addEventListener("click", async () => {
-    clearAuthError(); const email = authEmail.value.trim();
-    if (!email) return showAuthError("Enter your email first, then tap Forgot password.");
-    if (!firebaseAuth) return showAuthError("Firebase login is not configured yet.");
-    try { await firebaseAuth.sendPasswordResetEmail(email); showAuthError("Password reset email sent. Check your inbox."); }
-    catch (error) { showAuthError(friendlyAuthError(error)); }
-});
-
-// Add account controls to the existing sidebar.
-function addAccountControls() {
-    const bottom = document.querySelector(".sidebar-bottom");
-    if (!bottom || document.getElementById("accountControls")) return;
-    const box = document.createElement("div"); box.id = "accountControls"; box.className = "account-controls";
-    box.innerHTML = `<div class="account-email" id="accountEmail"></div><button type="button" id="logoutButton" class="logout-button">↪ Log out</button>`;
-    bottom.prepend(box);
-    const email = document.getElementById("accountEmail"); if (email) email.textContent = window.KRISHTI_USER?.email || "Signed in";
-    document.getElementById("logoutButton")?.addEventListener("click", async () => { if (firebaseAuth) await firebaseAuth.signOut(); });
-}
-const _showApp = showApp;
-showApp = function(user) {
-    _showApp(user);
-    addAccountControls();
-    // Switch history namespace to this authenticated user.
-    if (typeof loadHistory === "function") {
-        loadHistory();
-        const latest = chats.slice().sort((a,b)=>(b.updatedAt||0)-(a.updatedAt||0))[0];
-        currentChatId = latest ? latest.id : null;
-        currentMessages = latest && Array.isArray(latest.messages) ? latest.messages.slice() : [];
-        if (typeof renderHistory === "function") renderHistory();
-        if (typeof updateCurrentTitle === "function") updateCurrentTitle();
-    }
-};
-
-initAuth();
-
-// =========================================================
 // KRISHTI AI V2 — FRONTEND SCRIPT
 // =========================================================
 
@@ -216,8 +78,7 @@ let selectedImage = null;
 // =========================================================
 // LOCAL CHAT HISTORY V6
 // =========================================================
-const HISTORY_KEY_BASE = "krishti_ai_chat_history_v2_";
-function getHistoryKey() { return HISTORY_KEY_BASE + (window.KRISHTI_USER?.uid || "guest"); }
+const HISTORY_KEY = "krishti_ai_chat_history_v1";
 const historyList = document.getElementById("chatHistoryList");
 const historySearch = document.getElementById("historySearch");
 const historySearchButton = document.getElementById("historySearchButton");
@@ -234,7 +95,7 @@ let restoringChat = false;
 
 function loadHistory() {
     try {
-        const raw = localStorage.getItem(getHistoryKey());
+        const raw = localStorage.getItem(HISTORY_KEY);
         chats = raw ? JSON.parse(raw) : [];
         if (!Array.isArray(chats)) chats = [];
     } catch (error) {
@@ -245,7 +106,7 @@ function loadHistory() {
 
 function saveHistory() {
     try {
-        localStorage.setItem(getHistoryKey(), JSON.stringify(chats));
+        localStorage.setItem(HISTORY_KEY, JSON.stringify(chats));
     } catch (error) {
         console.warn("History could not be saved:", error);
     }

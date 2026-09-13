@@ -14,25 +14,7 @@
 
 <link rel="stylesheet" href="style.css">
 
-</head><body>
-<div id="authScreen" class="auth-screen">
-  <div class="auth-card">
-    <div class="auth-logo">🤖</div>
-    <h1>Krishti AI</h1>
-    <p class="auth-subtitle">Your intelligent AI assistant</p>
-    <div id="authError" class="auth-error" hidden></div>
-    <form id="emailAuthForm" class="auth-form">
-      <input id="authEmail" type="email" placeholder="Email" autocomplete="email" required>
-      <div class="password-wrap"><input id="authPassword" type="password" placeholder="Password" autocomplete="current-password" minlength="6" required><button type="button" id="togglePassword" aria-label="Show password">👁</button></div>
-      <button id="emailLoginButton" class="auth-primary" type="submit">Log in</button>
-    </form>
-    <div class="auth-divider"><span>OR</span></div>
-    <button id="googleLoginButton" class="google-button" type="button"><span class="google-g">G</span> Continue with Google</button>
-    <div class="auth-links"><button id="authModeButton" type="button">Create an account</button><button id="forgotPasswordButton" type="button">Forgot password?</button></div>
-    <p class="auth-note">By continuing, you agree to use Krishti AI responsibly.</p>
-  </div>
-</div>
-<div id="appShell" class="app" hidden><!-- ==============================
+</head><body><div class="app"><!-- ==============================
      SIDEBAR
 =============================== -->
 
@@ -244,9 +226,5 @@
 
 </main>
 
-</div>
-<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
-<script src="script.js"></script>
-</body>
+</div><script src="script.js"></script></body>
 </html>

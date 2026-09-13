@@ -34,3 +34,25 @@ GEMINI_API_KEY=your_gemini_api_key
 ## Chat history note
 
 V6 stores chat history in the user's browser `localStorage`. This means history is available on the same browser/device, but it is not yet synced between devices or accounts. A real email login + cloud-synced history is the next phase.
+
+
+## V7 Login setup
+V7 adds real Firebase Authentication with:
+- Email/password sign up and login
+- Google login
+- Forgot-password email
+- Persistent browser login session
+- Logout
+- Local chat history separated by Firebase user UID
+
+### Firebase setup
+1. Create a project in Firebase Console.
+2. Enable Authentication -> Sign-in method -> Email/Password and Google.
+3. Add a Web App and copy its Firebase configuration.
+4. Open `script.js` and replace the `YOUR_...` values in `FIREBASE_CONFIG`.
+5. In Firebase Authentication -> Settings -> Authorized domains, add your Render domain.
+6. Commit/push the project and redeploy on Render.
+
+The Firebase web config is not a password or Gemini API key. Keep `GEMINI_API_KEY` only on the server/Render environment.
+
+Note: this V7 keeps chat history in the user's browser, namespaced by Firebase UID. Cloud-synced history/database is the next phase.
