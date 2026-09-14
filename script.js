@@ -14,16 +14,8 @@ const FIREBASE_CONFIG = {
 
 const authScreen = document.getElementById("authScreen");
 const appShell = document.getElementById("appShell");
-const emailAuthForm = document.getElementById("emailAuthForm");
-const authEmail = document.getElementById("authEmail");
-const authPassword = document.getElementById("authPassword");
-const emailLoginButton = document.getElementById("emailLoginButton");
 const googleLoginButton = document.getElementById("googleLoginButton");
-const authModeButton = document.getElementById("authModeButton");
-const forgotPasswordButton = document.getElementById("forgotPasswordButton");
-const togglePassword = document.getElementById("togglePassword");
 const authError = document.getElementById("authError");
-let authMode = "login";
 let firebaseAuth = null;
 
 function showAuthError(message) {
@@ -32,13 +24,7 @@ function showAuthError(message) {
     authError.hidden = false;
 }
 function clearAuthError() { if (authError) authError.hidden = true; }
-function setAuthMode(mode) {
-    authMode = mode;
-    clearAuthError();
-    emailLoginButton.textContent = mode === "login" ? "Log in" : "Create account";
-    authModeButton.textContent = mode === "login" ? "Create an account" : "Already have an account? Log in";
-    forgotPasswordButton.hidden = mode !== "login";
-}
+
 function mapFirebaseError(error) {
     return friendlyAuthError(error);
 }
@@ -92,208 +78,6 @@ function authDiagnostic(error, context = "Authentication") {
     }
     return `${friendlyAuthError(error)} [${code}]`;
 }
-
-let recaptchaVerifier = null;
-let phoneConfirmationResult = null;
-let phoneLastNumber = "";
-let otpTimerId = null;
-let otpSeconds = 0;
-
-function resetRecaptcha() {
-    if (recaptchaVerifier) {
-        try { recaptchaVerifier.clear(); } catch {}
-    }
-    recaptchaVerifier = null;
-    const box = document.getElementById("recaptcha-container");
-    if (box) box.innerHTML = "";
-}
-
-async function setupRecaptcha() {
-    if (!firebaseAuth) throw new Error("Firebase authentication is not ready.");
-    resetRecaptcha();
-    const container = document.getElementById("recaptcha-container");
-    if (!container) throw new Error("reCAPTCHA container is missing.");
-    recaptchaVerifier = new firebase.auth.RecaptchaVerifier(container, {
-        size: "normal",
-        callback: () => clearAuthError(),
-        "expired-callback": () => showAuthError("reCAPTCHA expired. Please verify again."),
-        "error-callback": () => showAuthError("reCAPTCHA could not load. Check your internet connection and Firebase authorized domain.")
-    });
-    await recaptchaVerifier.render();
-    return recaptchaVerifier;
-}
-
-function getPhoneNumber() {
-    const code = (document.getElementById("phone-country")?.value || "+91").trim();
-    let number = (document.getElementById("phone-number")?.value || "").trim();
-    number = number.replace(/[\s()-]/g, "");
-    if (number.startsWith("+")) return number;
-    return code + number.replace(/^0+/, "");
-}
-
-function startOtpTimer(seconds = 30) {
-    clearInterval(otpTimerId);
-    otpSeconds = seconds;
-    const timer = document.getElementById("otpTimer");
-    const resend = document.getElementById("resendPhoneOtpButton");
-    if (resend) resend.disabled = true;
-    const tick = () => {
-        if (timer) timer.textContent = otpSeconds > 0 ? `(${otpSeconds}s)` : "";
-        if (otpSeconds <= 0) {
-            clearInterval(otpTimerId);
-            if (resend) resend.disabled = false;
-            return;
-        }
-        otpSeconds -= 1;
-    };
-    tick();
-    otpTimerId = setInterval(tick, 1000);
-}
-
-function setPhoneBusy(busy, buttonId) {
-    const button = document.getElementById(buttonId);
-    if (!button) return;
-    button.disabled = busy;
-    if (buttonId === "sendPhoneOtpButton") button.textContent = busy ? "Sending OTP…" : "📱 Send OTP";
-    if (buttonId === "verifyPhoneOtpButton") button.textContent = busy ? "Verifying…" : "Verify & Login";
-}
-
-async function sendPhoneOTP() {
-    clearAuthError();
-    if (!firebaseConfigured() || !firebaseAuth) {
-        showAuthError("Firebase login is not ready. Please reload the page.");
-        return;
-    }
-    const phone = getPhoneNumber();
-    if (!/^\+\d{8,15}$/.test(phone)) {
-        showAuthError("Enter a valid mobile number. For India, enter 10 digits after +91.");
-        document.getElementById("phone-number")?.focus();
-        return;
-    }
-    setPhoneBusy(true, "sendPhoneOtpButton");
-    try {
-        const verifier = await setupRecaptcha();
-        phoneConfirmationResult = await firebaseAuth.signInWithPhoneNumber(phone, verifier);
-        phoneLastNumber = phone;
-        document.getElementById("phone-otp-section")?.classList.remove("hidden");
-        const otp = document.getElementById("phone-otp");
-        if (otp) { otp.value = ""; otp.focus(); }
-        startOtpTimer(30);
-        showToast("OTP sent successfully.");
-    } catch (error) {
-        console.error("Phone OTP error:", error);
-        phoneConfirmationResult = null;
-        resetRecaptcha();
-        showAuthError(authDiagnostic(error, "Phone OTP"));
-        showToast(authDiagnostic(error, "Phone OTP"));
-    } finally {
-        setPhoneBusy(false, "sendPhoneOtpButton");
-    }
-}
-
-async function verifyPhoneOTP() {
-    clearAuthError();
-    const otp = (document.getElementById("phone-otp")?.value || "").replace(/\D/g, "").trim();
-    if (!phoneConfirmationResult) {
-        showAuthError("Request an OTP first.");
-        return;
-    }
-    if (!/^\d{6}$/.test(otp)) {
-        showAuthError("Enter the 6-digit OTP.");
-        return;
-    }
-    setPhoneBusy(true, "verifyPhoneOtpButton");
-    try {
-        await phoneConfirmationResult.confirm(otp);
-        phoneConfirmationResult = null;
-        clearInterval(otpTimerId);
-        resetRecaptcha();
-        document.getElementById("phone-otp-section")?.classList.add("hidden");
-        showToast("Phone login successful.");
-    } catch (error) {
-        console.error("Phone verification error:", error);
-        showAuthError(authDiagnostic(error, "Phone verification"));
-        showToast(authDiagnostic(error, "Phone verification"));
-    } finally {
-        setPhoneBusy(false, "verifyPhoneOtpButton");
-    }
-}
-
-async function resendPhoneOTP() {
-    if (otpSeconds > 0) return;
-    await sendPhoneOTP();
-}
-
-document.getElementById("sendPhoneOtpButton")?.addEventListener("click", sendPhoneOTP);
-document.getElementById("verifyPhoneOtpButton")?.addEventListener("click", verifyPhoneOTP);
-document.getElementById("resendPhoneOtpButton")?.addEventListener("click", resendPhoneOTP);
-document.getElementById("phone-number")?.addEventListener("input", (event) => {
-    event.target.value = event.target.value.replace(/[^0-9+]/g, "").replace(/(?!^)\+/g, "");
-    clearAuthError();
-});
-document.getElementById("phone-otp")?.addEventListener("input", (event) => {
-    event.target.value = event.target.value.replace(/\D/g, "").slice(0, 6);
-});
-
-function firebaseConfigured() {
-    return window.firebase && FIREBASE_CONFIG.apiKey && !FIREBASE_CONFIG.apiKey.startsWith("YOUR_") && FIREBASE_CONFIG.projectId && !FIREBASE_CONFIG.projectId.startsWith("YOUR_");
-}
-function showApp(user) {
-    if (authScreen) authScreen.hidden = true;
-    if (appShell) appShell.hidden = false;
-    window.KRISHTI_USER = user;
-}
-function showAuth() {
-    if (appShell) appShell.hidden = true;
-    if (authScreen) authScreen.hidden = false;
-    phoneConfirmationResult = null;
-    clearInterval(otpTimerId);
-    resetRecaptcha();
-    document.getElementById("phone-otp-section")?.classList.add("hidden");
-}
-function initAuth() {
-    if (!firebaseConfigured()) {
-        showAuthError("Firebase login is not configured yet. Add your Firebase Web App config in script.js.");
-        return;
-    }
-    try {
-        if (!firebase.apps.length) firebase.initializeApp(FIREBASE_CONFIG);
-        firebaseAuth = firebase.auth();
-        firebaseAuth.languageCode = "en";
-        firebaseAuth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);
-        firebaseAuth.onAuthStateChanged(user => user ? showApp(user) : showAuth());
-    } catch (error) {
-        console.error(error);
-        showAuthError("Could not start login. Please check the Firebase configuration.");
-    }
-}
-emailAuthForm?.addEventListener("submit", async (event) => {
-    event.preventDefault(); clearAuthError();
-    if (!firebaseAuth) return showAuthError("Firebase login is not configured yet.");
-    const email = authEmail.value.trim(); const password = authPassword.value;
-    try {
-        emailLoginButton.disabled = true;
-        if (authMode === "login") await firebaseAuth.signInWithEmailAndPassword(email, password);
-        else await firebaseAuth.createUserWithEmailAndPassword(email, password);
-    } catch (error) { showAuthError(friendlyAuthError(error)); }
-    finally { emailLoginButton.disabled = false; }
-});
-
-googleLoginButton?.addEventListener("click", async () => {
-    clearAuthError();
-    if (!firebaseAuth) return showAuthError("Firebase login is not configured yet.");
-    try { await firebaseAuth.signInWithPopup(new firebase.auth.GoogleAuthProvider()); }
-    catch (error) { showAuthError(friendlyAuthError(error)); }
-});
-authModeButton?.addEventListener("click", () => setAuthMode(authMode === "login" ? "signup" : "login"));
-togglePassword?.addEventListener("click", () => { authPassword.type = authPassword.type === "password" ? "text" : "password"; });
-forgotPasswordButton?.addEventListener("click", async () => {
-    clearAuthError(); const email = authEmail.value.trim();
-    if (!email) return showAuthError("Enter your email first, then tap Forgot password.");
-    if (!firebaseAuth) return showAuthError("Firebase login is not configured yet.");
-    try { await firebaseAuth.sendPasswordResetEmail(email); showAuthError("Password reset email sent. Check your inbox."); }
-    catch (error) { showAuthError(friendlyAuthError(error)); }
-});
 
 // Add account controls to the existing sidebar.
 function addAccountControls() {
@@ -382,7 +166,6 @@ document.getElementById("dashboardClose")?.addEventListener("click",closeKrishti
 document.getElementById("adminRefresh")?.addEventListener("click",loadAdminDashboard);
 const oldAddAccountControls=addAccountControls;
 addAccountControls=function(){ oldAddAccountControls(); addDashboardButton(); recordActivity("login"); };
-const oldSendPhone=sendPhoneOTP;
 initAuth();
 
 // =========================================================
