@@ -214,34 +214,49 @@
         <div class="composer-hint">Krishti AI can make mistakes. Check important information.</div>
     </div>
 
-<section id="settingsView" class="settings-view" hidden aria-label="Settings">
+<section id="settingsView" class="settings-view" hidden aria-label="Krishti Settings">
   <div class="settings-shell">
     <aside class="settings-nav">
-      <div class="settings-nav-top"><button id="settingsBack" type="button" class="settings-back">←</button><strong>Settings</strong></div>
-      <button class="settings-nav-item active" data-setting-section="General">General</button>
-      <button class="settings-nav-item" data-setting-section="Personalization">Personalization</button>
-      <button class="settings-nav-item" data-setting-section="Memory">Memory</button>
-      <button class="settings-nav-item" data-setting-section="Plugins">Plugins</button>
-      <button class="settings-nav-item" data-setting-section="Workspace">Workspace</button>
-      <button class="settings-nav-item" data-setting-section="Usage & limits">Usage & limits</button>
-      <button class="settings-nav-item" data-setting-section="Trusted contact">Trusted contact</button>
-      <button class="settings-nav-item" data-setting-section="Parental controls">Parental controls</button>
-      <div class="settings-nav-divider"></div>
-      <button class="settings-nav-item" data-setting-section="Appearance">Appearance</button>
-      <button class="settings-nav-item" data-setting-section="Accent color">Accent color</button>
-      <button class="settings-nav-item" data-setting-section="Notifications">Notifications</button>
-      <button class="settings-nav-item" data-setting-section="Voice">Voice</button>
-      <button class="settings-nav-item" data-setting-section="Safety">Safety</button>
-      <button class="settings-nav-item" data-setting-section="Security & login">Security & login</button>
-      <button class="settings-nav-item" data-setting-section="Storage">Storage</button>
-      <button class="settings-nav-item" data-setting-section="Data controls">Data controls</button>
-      <div class="settings-nav-divider"></div>
-      <button class="settings-nav-item" data-setting-section="Report bug">Report bug</button>
-      <button class="settings-nav-item" data-setting-section="About">About</button>
-      <button class="settings-nav-item danger" data-setting-section="Log out">Log out</button>
+      <div class="settings-nav-top"><button id="settingsBack" type="button" class="settings-back">←</button><div><strong>Krishti Control Center</strong><small>Personalize your AI</small></div></div>
+      <div class="settings-nav-group-label">MY KRISHTI</div>
+      <button class="settings-nav-item active" data-setting-section="Krishti Profile"><span>👤</span> Krishti Profile</button>
+      <button class="settings-nav-item" data-setting-section="Krishti Personality"><span>✨</span> Krishti Personality</button>
+      <button class="settings-nav-item" data-setting-section="My Preferences"><span>📝</span> My Preferences</button>
+      <div class="settings-nav-group-label">KRISHTI BRAIN</div>
+      <button class="settings-nav-item" data-setting-section="Krishti Memory"><span>🧠</span> Krishti Memory</button>
+      <button class="settings-nav-item" data-setting-section="Conversation Recall"><span>💬</span> Conversation Recall</button>
+      <button class="settings-nav-item" data-setting-section="Krishti Knowledge"><span>📚</span> Krishti Knowledge</button>
+      <div class="settings-nav-group-label">EXPERIENCE</div>
+      <button class="settings-nav-item" data-setting-section="Krishti Look"><span>🎨</span> Krishti Look</button>
+      <button class="settings-nav-item" data-setting-section="Krishti Colors"><span>🌈</span> Krishti Colors</button>
+      <button class="settings-nav-item" data-setting-section="Chat Experience"><span>💫</span> Chat Experience</button>
+      <button class="settings-nav-item" data-setting-section="Voice & Sound"><span>🎙️</span> Voice & Sound</button>
+      <div class="settings-nav-group-label">KRISHTI TOOLS</div>
+      <button class="settings-nav-item" data-setting-section="Web Explorer"><span>🌐</span> Web Explorer</button>
+      <button class="settings-nav-item" data-setting-section="Vision & Images"><span>🖼️</span> Vision & Images</button>
+      <button class="settings-nav-item" data-setting-section="Document Brain"><span>📄</span> Document Brain</button>
+      <button class="settings-nav-item" data-setting-section="Connected Tools"><span>🔌</span> Connected Tools</button>
+      <div class="settings-nav-group-label">TRUST & CONTROL</div>
+      <button class="settings-nav-item" data-setting-section="Privacy Center"><span>🛡️</span> Privacy Center</button>
+      <button class="settings-nav-item" data-setting-section="Memory Control"><span>🧹</span> Memory Control</button>
+      <button class="settings-nav-item" data-setting-section="Security"><span>🔐</span> Security</button>
+      <button class="settings-nav-item" data-setting-section="Data & Storage"><span>💾</span> Data & Storage</button>
+      <button class="settings-nav-item" data-setting-section="Safety"><span>❤️</span> Safety</button>
+      <div class="settings-nav-group-label">KRISHTI APP</div>
+      <button class="settings-nav-item" data-setting-section="Mobile Experience"><span>📱</span> Mobile Experience</button>
+      <button class="settings-nav-item" data-setting-section="Notifications"><span>🔔</span> Notifications</button>
+      <button class="settings-nav-item" data-setting-section="Offline & Network"><span>📶</span> Offline & Network</button>
+      <button class="settings-nav-item" data-setting-section="App Updates"><span>🚀</span> App Updates</button>
+      <div class="settings-nav-group-label">ABOUT KRISHTI</div>
+      <button class="settings-nav-item" data-setting-section="What's New"><span>✨</span> What's New</button>
+      <button class="settings-nav-item" data-setting-section="Krishti Labs"><span>🧪</span> Krishti Labs</button>
+      <button class="settings-nav-item" data-setting-section="Help"><span>❓</span> Help</button>
+      <button class="settings-nav-item" data-setting-section="Report a Problem"><span>🐞</span> Report a Problem</button>
+      <button class="settings-nav-item" data-setting-section="About Krishti AI"><span>💜</span> About Krishti AI</button>
+      <button class="settings-nav-item danger" data-setting-section="Log out"><span>↪</span> Log out</button>
     </aside>
     <main class="settings-content">
-      <div class="settings-mobile-head"><button id="settingsMobileBack" type="button">←</button><span>Settings</span></div>
+      <div class="settings-mobile-head"><button id="settingsMobileBack" type="button">←</button><span>Krishti Settings</span></div>
       <div id="settingsContent"></div>
     </main>
   </div>

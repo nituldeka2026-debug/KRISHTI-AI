@@ -1,6 +1,6 @@
 {
   "name": "krishti-ai",
-  "version": "7.0.0",
+  "version": "14.0.0",
   "description": "Krishti AI with Firebase email/Google login, per-user local chat history, document support and natural-language photo editing.",
   "main": "server.js",
   "scripts": {

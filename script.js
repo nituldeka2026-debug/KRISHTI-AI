@@ -182,6 +182,7 @@ const _showApp = showApp;
 showApp = function(user) {
     _showApp(user);
     addAccountControls();
+    window.loadKrishtiSettings?.();
     // Switch history namespace to this authenticated user.
     if (typeof loadHistory === "function") {
         loadHistory();
@@ -807,7 +808,15 @@ async function sendMessage(customMessage = null) {
 
     try {
         const modeInstruction = activeKrishtiMode === "fast" ? "Answer quickly and concisely." : activeKrishtiMode === "deep" ? "Reason carefully, verify assumptions, and provide a thorough answer." : activeKrishtiMode === "creative" ? "Be creative, original, and idea-rich while staying accurate." : activeKrishtiMode === "research" ? "Act like a web research assistant; prioritize current, sourced information." : "Be helpful, balanced, clear, and practical.";
-        const enrichedMessage = `[Krishti ${activeKrishtiMode} mode] ${modeInstruction}\n\nUser: ${message}`;
+        const ks = window.KRISHTI_SETTINGS || {};
+        const personalization = [
+            ks.personality?.style ? `Personality: ${ks.personality.style}.` : '',
+            ks.personality?.customInstructions ? `Custom instructions: ${ks.personality.customInstructions}` : '',
+            ks.preferences?.language && ks.preferences.language !== 'Auto' ? `Preferred reply language: ${ks.preferences.language}.` : '',
+            ks.preferences?.responseLength ? `Preferred answer length: ${ks.preferences.responseLength}.` : '',
+            ks.brain?.memoryEnabled === false ? 'Do not use saved personalization memory.' : ''
+        ].filter(Boolean).join('\n');
+        const enrichedMessage = `[Krishti ${activeKrishtiMode} mode] ${modeInstruction}\n${personalization ? `\n${personalization}\n` : ''}\nUser: ${message}`;
         const response = await fetch("/api/chat", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -961,7 +970,7 @@ if (chatForm) {
 
 if (userInput) {
     userInput.addEventListener("keydown", event => {
-        if (event.key === "Enter" && !event.shiftKey) {
+        if (event.key === "Enter" && !event.shiftKey && (window.KRISHTI_SETTINGS?.experience?.sendWithEnter !== false)) {
             event.preventDefault();
             sendMessage();
         }
@@ -1688,7 +1697,10 @@ window.verifyPhoneOTP = verifyPhoneOTP;
 // =========================================================
 // V10.7 — SETTINGS / PROFILE / MORE
 // =========================================================
-(function initKrishtiStyleControls(){
+// =========================================================
+// KRISHTI SETTINGS 2.0 — FRONTEND + BACKEND SYNC
+// =========================================================
+(function initKrishtiSettingsV14(){
     const moreButton = Array.from(document.querySelectorAll('.sidebar-nav-item')).find(el => el.textContent.trim().includes('More'));
     const moreMenu = document.getElementById('moreMenu');
     const settingsView = document.getElementById('settingsView');
@@ -1703,126 +1715,160 @@ window.verifyPhoneOTP = verifyPhoneOTP;
     const profileEmail = document.getElementById('profileMenuEmail');
     const sectionButtons = Array.from(document.querySelectorAll('.settings-nav-item'));
 
-    const settingState = {
-        memory: localStorage.getItem('krishti_memory_enabled') !== 'false',
-        notifications: localStorage.getItem('krishti_notifications_enabled') !== 'false',
-        appearance: localStorage.getItem('krishti_appearance') || 'dark',
-        accent: localStorage.getItem('krishti_accent') || '#6d5dfc'
+    const DEFAULTS = {
+        profile:{displayName:'Krishti User',aiNickname:'Krishti'},
+        personality:{style:'Friendly',customInstructions:''},
+        preferences:{language:'Auto',responseLength:'Balanced'},
+        brain:{memoryEnabled:true,recallEnabled:true,knowledgeEnabled:true},
+        experience:{theme:'dark',accent:'#8b5cf6',compactMode:false,sendWithEnter:true,voiceReply:false,voiceRate:1},
+        tools:{webEnabled:true,imageEnabled:true,documentEnabled:true,pluginsEnabled:false},
+        trust:{saveConversations:true,localAnalytics:false,safeMode:true},
+        app:{mobileOptimized:true,notifications:true,offlineMode:true,autoUpdate:true}
+    };
+    let settings = JSON.parse(localStorage.getItem('krishti_settings_v14') || 'null') || structuredClone(DEFAULTS);
+    window.KRISHTI_SETTINGS = settings;
+
+    function cloneDefaults(){ return JSON.parse(JSON.stringify(DEFAULTS)); }
+    function deepMerge(base, incoming){
+        const out = {...base};
+        Object.keys(incoming || {}).forEach(k => {
+            if (incoming[k] && typeof incoming[k] === 'object' && !Array.isArray(incoming[k]) && base[k] && typeof base[k] === 'object') out[k] = deepMerge(base[k], incoming[k]);
+            else if (incoming[k] !== undefined) out[k] = incoming[k];
+        });
+        return out;
+    }
+    function currentUserKey(){ return window.KRISHTI_USER?.uid || window.KRISHTI_USER?.email || 'local-user'; }
+    function persistLocal(){ localStorage.setItem('krishti_settings_v14', JSON.stringify(settings)); window.KRISHTI_SETTINGS=settings; applySettings(); }
+    async function syncSettings(method='GET'){
+        try{
+            const key=encodeURIComponent(currentUserKey());
+            if(method==='GET'){
+                const r=await fetch('/api/settings?user='+key,{cache:'no-store'});
+                if(!r.ok) throw new Error('settings get failed');
+                const data=await r.json();
+                settings=deepMerge(cloneDefaults(),data.settings||{}); persistLocal(); return settings;
+            }
+            const r=await fetch('/api/settings',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({user:currentUserKey(),settings})});
+            if(!r.ok) throw new Error('settings save failed');
+            return await r.json();
+        }catch(e){ console.warn('Krishti settings sync:',e.message); return null; }
+    }
+    async function setSetting(path,value,save=true){
+        const parts=path.split('.'); let obj=settings;
+        for(let i=0;i<parts.length-1;i++){ if(!obj[parts[i]]) obj[parts[i]]={}; obj=obj[parts[i]]; }
+        obj[parts.at(-1)]=value; persistLocal();
+        if(save) await syncSettings('PUT');
+        showToast('Krishti setting saved');
+    }
+    function val(path,fallback=''){
+        return path.split('.').reduce((o,k)=>o?.[k],settings) ?? fallback;
+    }
+    function esc(v){ return typeof escapeHTML==='function' ? escapeHTML(String(v)) : String(v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+    function checked(v){ return v ? 'checked' : ''; }
+    function selected(a,b){ return a===b?'selected':''; }
+    function card(title,desc,control){ return `<div class="setting-row"><div class="setting-row-main"><strong>${title}</strong><span>${desc}</span></div>${control}</div>`; }
+    function toggle(id,path,descTitle,desc){ return card(descTitle,desc,`<label class="switch"><input id="${id}" data-setting-path="${path}" type="checkbox" ${checked(val(path))}><span></span></label>`); }
+    function selectControl(id,path,options){ return `<select id="${id}" class="setting-select" data-setting-path="${path}">${options.map(x=>`<option ${selected(val(path),x)}>${esc(x)}</option>`).join('')}</select>`; }
+    function textControl(id,path,placeholder){ return `<input id="${id}" class="setting-input" data-setting-path="${path}" value="${esc(val(path))}" placeholder="${esc(placeholder)}">`; }
+
+    const info = {
+      'Krishti Profile': ['👤 Krishti Profile','Make the assistant feel like your own Krishti space.', `<div class="setting-card">${card('Your display name','Shown inside your personal Krishti experience.',textControl('displayName','profile.displayName','Your name'))}${card('AI nickname','What you call your assistant.',textControl('aiNickname','profile.aiNickname','Krishti'))}</div><div class="settings-note">Account: ${esc(window.KRISHTI_USER?.email||'Signed in')}</div>`],
+      'Krishti Personality':['✨ Krishti Personality','Choose how Krishti speaks and follows your instructions.', `<div class="setting-card">${card('Personality', 'Choose the default tone of replies.',selectControl('personalityStyle','personality.style',['Friendly','Professional','Creative','Tutor','Direct']))}${card('Custom instructions','Extra instructions are added to your chat requests.',`<textarea id="customInstructions" class="setting-textarea" data-setting-path="personality.customInstructions" placeholder="Example: Keep answers concise and use Assamese-English mix when I do.">${esc(val('personality.customInstructions'))}</textarea>`)}</div>`],
+      'My Preferences':['📝 My Preferences','Set language and answer density without copying another app.', `<div class="setting-card">${card('Reply language','Auto follows the language you use.',selectControl('language','preferences.language',['Auto','English','Assamese','Hindi','Bengali']))}${card('Answer length','Control how much detail Krishti normally gives.',selectControl('responseLength','preferences.responseLength',['Short','Balanced','Detailed']))}</div>`],
+      'Krishti Memory':['🧠 Krishti Memory','Control what Krishti can use to personalize future chats.', `<div class="setting-card">${toggle('memoryEnabled','brain.memoryEnabled','Memory','Use saved preferences in future chats.')}${toggle('recallEnabled','brain.recallEnabled','Conversation Recall','Use recent conversation context when available.')}${toggle('knowledgeEnabled','brain.knowledgeEnabled','Krishti Knowledge','Use your local Library items as a knowledge source.')}</div>`],
+      'Conversation Recall':['💬 Conversation Recall','Choose how much previous chat context Krishti should use.', `<div class="setting-card">${toggle('recallEnabled2','brain.recallEnabled','Use recent conversations','Allow recent conversation context in chat requests.')}${card('Local history','Your chat list is stored by the current V13/V14 browser build.','<span class="setting-value">'+(Array.isArray(window.chats)?window.chats.length:'Ready')+' chats</span>')}</div>`],
+      'Krishti Knowledge':['📚 Krishti Knowledge','Your Library is the local knowledge shelf for notes, backups and generated items.', `<div class="setting-card">${toggle('knowledgeEnabled2','brain.knowledgeEnabled','Library knowledge','Allow Library metadata to guide future features.')}${card('Open Library','Review saved items and backup tools.','<button class="setting-button" data-action="library">Open</button>')}</div>`],
+      'Krishti Look':['🎨 Krishti Look','Control the overall visual mode of Krishti AI.', `<div class="setting-card">${card('Theme','Dark is the default Krishti signature look.',selectControl('theme','experience.theme',['dark','light']))}${toggle('compactMode','experience.compactMode','Compact chat','Reduce spacing for a denser chat layout.')}</div>`],
+      'Krishti Colors':['🌈 Krishti Colors','Pick the accent used by buttons, switches and highlights.', `<div class="setting-card">${card('Accent','Saved locally and synced to the Krishti backend.',`<div class="accent-options">${['#8b5cf6','#14b8a6','#3b82f6','#e879f9','#f59e0b','#ef4444'].map(c=>`<button type="button" class="accent-dot ${val('experience.accent')===c?'active':''}" data-accent="${c}" style="background:${c}" aria-label="${c}"></button>`).join('')}</div>`)}</div>`],
+      'Chat Experience':['💫 Chat Experience','Control composer behaviour and everyday chat feel.', `<div class="setting-card">${toggle('sendWithEnter','experience.sendWithEnter','Send with Enter','Press Enter to send a message; Shift+Enter stays a new line.')}${card('Current mode','Fast, Smart, Deep, Creative or Web Research.',`<span class="setting-value">${esc(typeof activeKrishtiMode!=='undefined'?activeKrishtiMode:'smart')}</span>`)}</div>`],
+      'Voice & Sound':['🎙️ Voice & Sound','Configure voice replies and browser voice input.', `<div class="setting-card">${toggle('voiceReply','experience.voiceReply','Speak AI replies','Use browser speech synthesis after Krishti replies.')}${card('Voice speed','Controls spoken reply speed.',`<input id="voiceRate" data-setting-path="experience.voiceRate" class="setting-range" type="range" min="0.7" max="1.5" step="0.1" value="${val('experience.voiceRate',1)}"><span id="voiceRateValue" class="setting-value">${val('experience.voiceRate',1)}×</span>`)}</div>`],
+      'Web Explorer':['🌐 Web Explorer','Turn Krishti web research access on or off.', `<div class="setting-card">${toggle('webEnabled','tools.webEnabled','Web Search','Allow the Web Search mode to send requests to the search backend.')}</div>`],
+      'Vision & Images':['🖼️ Vision & Images','Control image generation and photo editing features.', `<div class="setting-card">${toggle('imageEnabled','tools.imageEnabled','Image Studio','Allow Create Image, Past Photo and Future Photo actions.')}</div>`],
+      'Document Brain':['📄 Document Brain','Control uploaded document analysis.', `<div class="setting-card">${toggle('documentEnabled','tools.documentEnabled','Document analysis','Allow documents to be included in chat requests.')}</div>`],
+      'Connected Tools':['🔌 Connected Tools','Manage optional integrations without pretending they are connected.', `<div class="setting-card">${toggle('pluginsEnabled','tools.pluginsEnabled','Connected tools','Enable the integration layer for plugins you add later.')}${card('Plugin status','No third-party plugin is connected in this build.','<span class="setting-value">Local / ready</span>')}</div>`],
+      'Privacy Center':['🛡️ Privacy Center','Choose what Krishti keeps on the device and sends to its backend.', `<div class="setting-card">${toggle('saveConversations','trust.saveConversations','Save conversations','Keep chat history in the browser.')}${toggle('localAnalytics','trust.localAnalytics','Local diagnostics','Allow non-identifying local diagnostics for troubleshooting.')}</div><div class="settings-note">This V14 build does not sell your data or expose a third-party analytics dashboard.</div>`],
+      'Memory Control':['🧹 Memory Control','Review and clear the local Krishti memory store.', `<div class="setting-card">${card('Saved memories','Current local memory items.',`<span class="setting-value">${Array.isArray(getLocalMemory?.())?getLocalMemory().length:0}</span>`)}${card('Clear local memory','Remove saved memory entries from this browser.','<button class="setting-button danger" data-action="clear-memory">Clear memory</button>')}</div>`],
+      'Security':['🔐 Security','Your Firebase login remains the identity layer for the app.', `<div class="setting-card">${card('Signed-in account','Current account.',`<span class="setting-value">${esc(window.KRISHTI_USER?.email||'Signed in')}</span>`)}${card('Session','Firebase authentication session.',`<span class="setting-value">Active</span>`)}${card('Log out','End the current login session.','<button class="setting-button danger" data-action="logout">Log out</button>')}</div>`],
+      'Data & Storage':['💾 Data & Storage','Export, import or clear local Krishti data.', `<div class="setting-card">${card('Chat history','Stored locally when enabled.',`<span class="setting-value">${Array.isArray(window.chats)?window.chats.length:0} chats</span>`)}${card('Backup','Portable JSON backup for chats, memory and Library.','<button class="setting-button" data-action="export">Export</button> <button class="setting-button" data-action="import">Import</button>')}${card('Clear chat history','Remove all chats from this browser.','<button class="setting-button danger" data-action="clear-history">Clear</button>')}</div>`],
+      'Safety':['❤️ Safety','Krishti safety controls for responsible use.', `<div class="setting-card">${toggle('safeMode','trust.safeMode','Krishti Safe Mode','Keep responsible-use guardrails enabled in the product experience.')}${card('Important information','Krishti can make mistakes. Check consequential information before relying on it.','<span class="setting-value">Always on</span>')}</div>`],
+      'Mobile Experience':['📱 Mobile Experience','Mobile-first controls for Android and small screens.', `<div class="setting-card">${toggle('mobileOptimized','app.mobileOptimized','Mobile layout','Use Krishti mobile drawer and compact utility views.')}${card('Installable app','PWA manifest and service worker are included.', '<span class="setting-value">Prepared</span>')}</div>`],
+      'Notifications':['🔔 Notifications','Control local Krishti status messages.', `<div class="setting-card">${toggle('notifications','app.notifications','Krishti notifications','Show helpful status messages and confirmations.')}</div>`],
+      'Offline & Network':['📶 Offline & Network','Choose how Krishti behaves when the network is unavailable.', `<div class="setting-card">${toggle('offlineMode','app.offlineMode','Offline shell','Keep the app shell and cached assets available offline.')}${card('AI requests','Gemini chat, web search and image generation require a network.', '<span class="setting-value">Online required</span>')}</div>`],
+      'App Updates':['🚀 App Updates','Keep the installable Krishti app current.', `<div class="setting-card">${toggle('autoUpdate','app.autoUpdate','Automatic app refresh','Allow the service worker to refresh cached assets.')}${card('Current release','Krishti AI V14 Settings 2.0', '<span class="setting-value">V14.0</span>')}</div>`],
+      "What's New":['✨ What’s New','Recent Krishti improvements in this build.', `<div class="setting-card"><div class="settings-release"><b>V14.0 — Krishti Settings 2.0</b><span>Custom Control Center • backend settings sync • mobile-first settings • real persistence</span></div><div class="settings-release"><b>V13.0</b><span>Modes • local memory • Library • voice • PWA preparation</span></div></div>`],
+      'Krishti Labs':['🧪 Krishti Labs','Experimental features that may change.', `<div class="setting-card">${toggle('pluginsEnabled2','tools.pluginsEnabled','Connected Tools beta','Keep future integrations available for testing.')}${toggle('offlineMode2','app.offlineMode','Offline shell beta','Use the service-worker cache when possible.')}</div>`],
+      'Help':['❓ Help','Quick help for using Krishti AI.', `<div class="setting-card">${card('How to chat','Type a message and press Send. Use the + menu for files, images and tools.','<button class="setting-button" data-action="help-chat">Show</button>')}${card('Mobile sidebar','Tap the menu icon to open the Krishti drawer.','<button class="setting-button" data-action="help-mobile">Show</button>')}</div>`],
+      'Report a Problem':['🐞 Report a Problem','Send a bug report to the Krishti backend.', `<div class="setting-card"><textarea id="bugReport" class="setting-textarea" placeholder="What happened? Include steps to reproduce."></textarea><button id="sendBugReport" class="setting-button primary" type="button">Send report</button></div>`],
+      'About Krishti AI':['💜 About Krishti AI','Your custom AI assistant.', `<div class="setting-card">${card('Version','Current Krishti release.','<span class="setting-value">V14.0</span>')}${card('Frontend','Custom Krishti Settings 2.0 UI.','<span class="setting-value">Connected</span>')}${card('Backend','Node.js settings API with per-user storage key.','<span class="setting-value">Connected</span>')}</div>`],
+      'Log out':['↪ Log out','End your current Krishti AI session.', `<div class="setting-card">${card('Log out of Krishti','You can sign in again anytime.','<button class="setting-button danger" data-action="logout">Log out</button>')}</div>`]
     };
 
-    function persistSetting(key, value){
-        settingState[key] = value;
-        localStorage.setItem('krishti_' + key, String(value));
-    }
-
-    function openSettings(section='General'){
-        if (!settingsView) return;
-        profileMenu?.setAttribute('hidden','');
-        moreMenu?.setAttribute('hidden','');
-        settingsView.hidden = false;
-        document.body.classList.add('settings-open');
-        selectSection(section);
-    }
-
-    function closeSettings(){
-        if (!settingsView) return;
-        settingsView.hidden = true;
-        document.body.classList.remove('settings-open');
-        if (settingsContent) settingsContent.classList.remove('mobile-active');
-        if (settingsNav) settingsNav.style.display = '';
-    }
-
-    function logout(){
-        if (firebaseAuth) firebaseAuth.signOut();
-        else showAuth();
-    }
-
-    function toggleMobileSettingsContent(){
-        if (window.innerWidth <= 700) {
-            settingsNav.style.display = 'none';
-            settingsContent.classList.add('mobile-active');
-        }
-    }
-
-    function selectSection(section){
-        sectionButtons.forEach(btn => btn.classList.toggle('active', btn.dataset.settingSection === section));
-        if (!settingsContent) return;
-        settingsContent.innerHTML = renderSettingsSection(section);
-        toggleMobileSettingsContent();
-        bindSettingsContent(section);
-    }
-
     function renderSettingsSection(section){
-        const email = window.KRISHTI_USER?.email || 'Signed in';
-        const checkedMemory = settingState.memory ? 'checked' : '';
-        const checkedNotifications = settingState.notifications ? 'checked' : '';
-        const checkedDark = settingState.appearance === 'dark' ? 'checked' : '';
-        const accents = ['#6d5dfc','#10a37f','#3b82f6','#e879f9','#f59e0b'];
-        const accentHTML = accents.map(c => `<button type="button" class="accent-dot ${settingState.accent===c?'active':''}" data-accent="${c}" style="background:${c}" aria-label="Accent ${c}"></button>`).join('');
-        const data = {
-            'General': `<h1>General</h1><p>Manage your Krishti AI account and basic app behaviour.</p><div class="setting-card"><div class="setting-row"><div class="setting-row-main"><strong>Account</strong><span>${escapeHTML(email)}</span></div><span class="setting-value">Krishti AI</span></div><div class="setting-row"><div class="setting-row-main"><strong>Language</strong><span>Choose the language used by the interface.</span></div><button class="setting-button" type="button" data-demo="Language">English ▾</button></div><div class="setting-row"><div class="setting-row-main"><strong>Start a new chat</strong><span>Open a clean conversation without deleting your history.</span></div><button class="setting-button" type="button" data-demo="New chat">New chat</button></div></div>`,
-            'Personalization': `<h1>Personalization</h1><p>Control how Krishti AI responds and remembers your preferences.</p><div class="setting-card"><div class="setting-row"><div class="setting-row-main"><strong>Custom instructions</strong><span>Tell Krishti AI how you want it to respond.</span></div><button class="setting-button" type="button" data-demo="Custom instructions">Edit</button></div><div class="setting-row"><div class="setting-row-main"><strong>Response style</strong><span>Use concise, helpful answers by default.</span></div><button class="setting-button" type="button" data-demo="Response style">Balanced ▾</button></div></div>`,
-            'Memory': `<h1>Memory</h1><p>Choose whether Krishti AI can use saved preferences in future chats.</p><div class="setting-card"><div class="setting-row"><div class="setting-row-main"><strong>Memory</strong><span>Use saved preferences to personalize future responses.</span></div><label class="switch"><input id="memorySwitch" type="checkbox" ${checkedMemory}><span></span></label></div><div class="setting-row"><div class="setting-row-main"><strong>Manage memory</strong><span>Review or change what Krishti AI uses for personalization.</span></div><button class="setting-button" type="button" data-demo="Manage memory">Open</button></div></div>`,
-            'Plugins': `<h1>Plugins</h1><p>Connected tools and integrations for Krishti AI.</p><div class="setting-card"><div class="setting-row"><div class="setting-row-main"><strong>Plugin directory</strong><span>Connect tools when you need extra capabilities.</span></div><button class="setting-button" type="button" data-demo="Plugin directory">Browse</button></div><div class="setting-row"><div class="setting-row-main"><strong>Connected plugins</strong><span>No additional plugin connection is configured in this build.</span></div><span class="setting-value">None</span></div></div>`,
-            'Workspace': `<h1>Workspace</h1><p>Manage the current Krishti AI workspace.</p><div class="setting-card"><div class="setting-row"><div class="setting-row-main"><strong>Personal workspace</strong><span>Your current workspace.</span></div><span class="setting-value">Personal</span></div><div class="setting-row"><div class="setting-row-main"><strong>Workspace name</strong><span>Krishti AI</span></div><button class="setting-button" type="button" data-demo="Workspace">Edit</button></div></div>`,
-            'Usage & limits': `<h1>Usage & limits</h1><p>See the limits associated with this local Krishti AI build.</p><div class="setting-card"><div class="setting-row"><div class="setting-row-main"><strong>Plan</strong><span>Current account tier.</span></div><span class="setting-value">Free</span></div><div class="setting-row"><div class="setting-row-main"><strong>Local chat history</strong><span>Stored in this browser using local storage.</span></div><span class="setting-value">Available</span></div></div>`,
-            'Trusted contact': `<h1>Trusted contact</h1><p>Trusted-contact controls are shown here as a settings placeholder.</p><div class="setting-card"><div class="setting-row"><div class="setting-row-main"><strong>Trusted contact</strong><span>No trusted contact is configured.</span></div><button class="setting-button" type="button" data-demo="Trusted contact">Set up</button></div></div>`,
-            'Parental controls': `<h1>Parental controls</h1><p>Parental-control options for this app.</p><div class="setting-card"><div class="setting-row"><div class="setting-row-main"><strong>Controls</strong><span>Manage family safety settings when supported by your deployment.</span></div><button class="setting-button" type="button" data-demo="Parental controls">Open</button></div></div>`,
-            'Appearance': `<h1>Appearance</h1><p>Change how Krishti AI looks on this device.</p><div class="setting-card"><div class="setting-row"><div class="setting-row-main"><strong>Dark mode</strong><span>Use the dark interface shown in the current Krishti AI design.</span></div><label class="switch"><input id="darkSwitch" type="checkbox" ${checkedDark}><span></span></label></div></div>`,
-            'Accent color': `<h1>Accent color</h1><p>Choose the highlight color used by controls in Krishti AI.</p><div class="setting-card"><div class="setting-row"><div class="setting-row-main"><strong>Accent</strong><span>Your selection is saved on this device.</span></div><div class="accent-options">${accentHTML}</div></div></div>`,
-            'Notifications': `<h1>Notifications</h1><p>Choose whether local UI notifications are enabled.</p><div class="setting-card"><div class="setting-row"><div class="setting-row-main"><strong>Notifications</strong><span>Show helpful status messages from Krishti AI.</span></div><label class="switch"><input id="notificationSwitch" type="checkbox" ${checkedNotifications}><span></span></label></div></div>`,
-            'Voice': `<h1>Voice</h1><p>Voice input preferences.</p><div class="setting-card"><div class="setting-row"><div class="setting-row-main"><strong>Voice input</strong><span>Use the microphone button in the composer when browser permission is available.</span></div><span class="setting-value">Browser controlled</span></div></div>`,
-            'Safety': `<h1>Safety</h1><p>Safety and responsible-use information for Krishti AI.</p><div class="setting-card"><div class="setting-row"><div class="setting-row-main"><strong>Responsible use</strong><span>Check important information before relying on it for consequential decisions.</span></div><span class="setting-value">Enabled</span></div></div>`,
-            'Security & login': `<h1>Security & login</h1><p>Review your current login session.</p><div class="setting-card"><div class="setting-row"><div class="setting-row-main"><strong>Signed-in account</strong><span>${escapeHTML(email)}</span></div><button class="setting-button" type="button" data-demo="Security">Review</button></div><div class="setting-row"><div class="setting-row-main"><strong>Log out</strong><span>End the current session on this device.</span></div><button class="setting-button danger" type="button" id="settingsLogout">Log out</button></div></div>`,
-            'Storage': `<h1>Storage</h1><p>Local storage used by this browser.</p><div class="setting-card"><div class="setting-row"><div class="setting-row-main"><strong>Chat history</strong><span>Chats are saved locally for this account in this browser.</span></div><button class="setting-button danger" type="button" id="clearHistoryButton">Clear</button></div></div>`,
-            'Data controls': `<h1>Data controls</h1><p>Control local data kept by Krishti AI.</p><div class="setting-card"><div class="setting-row"><div class="setting-row-main"><strong>Local chat history</strong><span>Keep your recent conversations on this device.</span></div><label class="switch"><input id="dataHistorySwitch" type="checkbox" checked><span></span></label></div></div>`,
-            'Report bug': `<h1>Report bug</h1><p>Tell the developer what went wrong.</p><div class="setting-card"><div class="setting-row"><div class="setting-row-main"><strong>Bug report</strong><span>Use the feedback channel available in your deployment.</span></div><button class="setting-button" type="button" data-demo="Report bug">Report</button></div></div>`,
-            'About': `<h1>About Krishti AI</h1><p>Your custom AI assistant interface.</p><div class="setting-card"><div class="setting-row"><div class="setting-row-main"><strong>Version</strong><span>Krishti signature interface</span></div><span class="setting-value">V10.7</span></div><div class="setting-row"><div class="setting-row-main"><strong>Backend</strong><span>Existing Krishti AI backend is preserved.</span></div><span class="setting-value">Connected</span></div></div>`,
-            'Log out': `<h1>Log out</h1><p>End your current Krishti AI session.</p><div class="setting-card"><div class="setting-row"><div class="setting-row-main"><strong>Log out of Krishti AI</strong><span>You can sign in again at any time.</span></div><button class="setting-button danger" type="button" id="settingsLogout">Log out</button></div></div>`
-        };
-        return `<div class="settings-panel">${data[section] || data.General}</div>`;
+        const d=info[section]||info['Krishti Profile'];
+        return `<div class="settings-panel"><div class="settings-kicker">KRISHTI AI • V14</div><h1>${d[0]}</h1><p>${d[1]}</p>${d[2]}</div>`;
     }
-
-    function bindSettingsContent(section){
-        document.getElementById('memorySwitch')?.addEventListener('change', e => persistSetting('memory_enabled', e.target.checked));
-        document.getElementById('notificationSwitch')?.addEventListener('change', e => persistSetting('notifications_enabled', e.target.checked));
-        document.getElementById('darkSwitch')?.addEventListener('change', e => { persistSetting('appearance', e.target.checked ? 'dark' : 'light'); document.body.classList.toggle('light-mode', !e.target.checked); showToast('Appearance updated'); });
-        document.querySelectorAll('.accent-dot').forEach(btn => btn.addEventListener('click', () => {
-            const color = btn.dataset.accent; persistSetting('accent', color); document.documentElement.style.setProperty('--krishti-accent', color); selectSection('Accent color');
-        }));
-        document.getElementById('settingsLogout')?.addEventListener('click', logout);
-        document.getElementById('clearHistoryButton')?.addEventListener('click', () => {
-            if (!window.confirm('Clear all saved chats on this device?')) return;
-            chats = []; currentChatId = null; currentMessages = []; saveHistory(); renderHistory(); startFreshChat(false); showToast('Chat history cleared');
+    function applySettings(){
+        const light=val('experience.theme')==='light';
+        document.body.classList.toggle('light-mode',light);
+        document.documentElement.style.setProperty('--krishti-accent',val('experience.accent','#8b5cf6'));
+        document.documentElement.style.setProperty('--krishti-compact',val('experience.compactMode')?'1':'0');
+        localStorage.setItem('krishti_voice_reply',String(!!val('experience.voiceReply')));
+        const hint=document.querySelector('.composer-hint'); if(hint && val('app.notifications')===false) hint.style.opacity='.65';
+    }
+    function toggleMobileSettingsContent(){
+        if(window.innerWidth<=700){ settingsNav.style.display='none'; settingsContent.classList.add('mobile-active'); }
+        else { settingsNav.style.display=''; settingsContent.classList.remove('mobile-active'); }
+    }
+    function openSettings(section='Krishti Profile'){
+        if(!settingsView)return;
+        profileMenu?.setAttribute('hidden',''); moreMenu?.setAttribute('hidden',''); settingsView.hidden=false; document.body.classList.add('settings-open'); selectSection(section);
+    }
+    function closeSettings(){ if(!settingsView)return; settingsView.hidden=true; document.body.classList.remove('settings-open'); settingsContent?.classList.remove('mobile-active'); if(settingsNav)settingsNav.style.display=''; }
+    function selectSection(section){ sectionButtons.forEach(b=>b.classList.toggle('active',b.dataset.settingSection===section)); if(!settingsContent)return; settingsContent.innerHTML=renderSettingsSection(section); toggleMobileSettingsContent(); bindSettingsContent(section); }
+    async function bindSettingsContent(section){
+        settingsContent.querySelectorAll('[data-setting-path]').forEach(el=>{
+            const handler=async()=>{
+                let value;
+                if(el.type==='checkbox') value=el.checked; else if(el.type==='range') value=Number(el.value); else value=el.value;
+                await setSetting(el.dataset.settingPath,value);
+                if(el.id==='voiceRateValue') return;
+                if(el.id==='voiceRate'){ const out=document.getElementById('voiceRateValue'); if(out)out.textContent=value+'×'; }
+            };
+            el.addEventListener(el.type==='range'||el.tagName==='SELECT'?'input':'change',handler);
+            if(el.tagName==='SELECT')el.addEventListener('change',handler);
+            if(el.tagName==='INPUT' && el.type==='text')el.addEventListener('change',handler);
+            if(el.tagName==='TEXTAREA')el.addEventListener('change',handler);
         });
-        document.querySelectorAll('[data-demo]').forEach(btn => btn.addEventListener('click', () => showToast(btn.dataset.demo + ' is ready for integration.')));
-        if (section === 'General') document.querySelector('[data-demo="New chat"]')?.addEventListener('click', () => { closeSettings(); startFreshChat(true); });
+        document.querySelectorAll('.accent-dot').forEach(btn=>btn.addEventListener('click',async()=>{await setSetting('experience.accent',btn.dataset.accent);selectSection('Krishti Colors');}));
+        settingsContent.querySelectorAll('[data-action]').forEach(btn=>btn.addEventListener('click',async()=>{
+            const a=btn.dataset.action;
+            if(a==='logout') return logout();
+            if(a==='library'){ closeSettings(); document.getElementById('libraryView')?.removeAttribute('hidden'); if(typeof renderLibrary==='function')renderLibrary(); return; }
+            if(a==='export'){ document.getElementById('exportKrishti')?.click(); return; }
+            if(a==='import'){ document.getElementById('importKrishti')?.click(); return; }
+            if(a==='clear-history'){ if(!confirm('Clear all saved chats on this device?'))return; chats=[];currentChatId=null;currentMessages=[];saveHistory();renderHistory();startFreshChat(false);showToast('Chat history cleared'); return; }
+            if(a==='clear-memory'){ if(!confirm('Clear local Krishti memory?'))return; localStorage.removeItem(typeof MEMORY_KEY!=='undefined'?MEMORY_KEY:'krishti_ai_memory_v1_');showToast('Local memory cleared');selectSection('Memory Control');return; }
+            if(a==='help-chat') return showToast('Type your question, then Send. Use + for tools.');
+            if(a==='help-mobile') return showToast('Use the top-left menu icon to open the Krishti drawer.');
+        }));
+        const report=document.getElementById('sendBugReport');
+        report?.addEventListener('click',async()=>{
+            const message=document.getElementById('bugReport')?.value.trim(); if(!message)return showToast('Write the problem first.');
+            try{const r=await fetch('/api/feedback',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user:currentUserKey(),message,type:'bug'})});if(!r.ok)throw new Error();document.getElementById('bugReport').value='';showToast('Bug report sent');}catch{showToast('Could not send report');}
+        });
+        if(section==='Krishti Profile') document.getElementById('displayName')?.addEventListener('change',()=>{const n=document.getElementById('displayName').value.trim();document.querySelectorAll('.profile-info strong').forEach(x=>{if(n)x.textContent=n;});});
     }
+    async function logout(){ if(firebaseAuth) await firebaseAuth.signOut(); else showAuth(); }
 
-    sectionButtons.forEach(btn => btn.addEventListener('click', () => selectSection(btn.dataset.settingSection)));
-    moreButton?.addEventListener('click', () => {
-        if (!moreMenu) return;
-        moreMenu.hidden = !moreMenu.hidden;
-    });
-    moreMenu?.querySelectorAll('[data-more]').forEach(btn => btn.addEventListener('click', () => { moreMenu.hidden = true; showToast(btn.dataset.more + ' selected'); }));
-
-    settingsButton?.addEventListener('click', () => openSettings('General'));
-    profileRow?.addEventListener('click', () => {
-        if (!profileMenu) return;
-        const email = window.KRISHTI_USER?.email || 'Signed in';
-        if (profileEmail) profileEmail.textContent = email;
-        profileMenu.hidden = !profileMenu.hidden;
-    });
-    profileSettings?.addEventListener('click', () => openSettings('General'));
-    profileLogout?.addEventListener('click', logout);
-    settingsBack?.addEventListener('click', closeSettings);
-    settingsMobileBack?.addEventListener('click', () => { settingsContent?.classList.remove('mobile-active'); if (settingsNav) settingsNav.style.display=''; });
-
-    document.addEventListener('click', e => {
-        if (!e.target.closest('.profile-row') && !e.target.closest('#profileMenu')) profileMenu?.setAttribute('hidden','');
-        if (!e.target.closest('.more-menu') && !e.target.closest('.more-dots') && !e.target.closest('.sidebar-nav-item')) moreMenu?.setAttribute('hidden','');
-    });
-
-    document.documentElement.style.setProperty('--krishti-accent', settingState.accent);
-    if (settingState.appearance === 'light') document.body.classList.add('light-mode');
+    window.loadKrishtiSettings=async()=>{ await syncSettings('GET'); applySettings(); if(!settingsView?.hidden)selectSection(document.querySelector('.settings-nav-item.active')?.dataset.settingSection||'Krishti Profile'); };
+    sectionButtons.forEach(btn=>btn.addEventListener('click',()=>selectSection(btn.dataset.settingSection)));
+    moreButton?.addEventListener('click',()=>{if(moreMenu)moreMenu.hidden=!moreMenu.hidden;});
+    moreMenu?.querySelectorAll('[data-more]').forEach(btn=>btn.addEventListener('click',()=>{moreMenu.hidden=true;showToast(btn.dataset.more+' selected');}));
+    document.getElementById('settingsButton')?.addEventListener('click',()=>openSettings());
+    profileRow?.addEventListener('click',()=>{if(!profileMenu)return;const email=window.KRISHTI_USER?.email||'Signed in';if(profileEmail)profileEmail.textContent=email;profileMenu.hidden=!profileMenu.hidden;});
+    profileSettings?.addEventListener('click',()=>openSettings()); profileLogout?.addEventListener('click',logout); settingsBack?.addEventListener('click',closeSettings);
+    settingsMobileBack?.addEventListener('click',()=>{settingsContent?.classList.remove('mobile-active');if(settingsNav)settingsNav.style.display='';});
+    document.addEventListener('click',e=>{if(!e.target.closest('.profile-row')&&!e.target.closest('#profileMenu'))profileMenu?.setAttribute('hidden','');if(!e.target.closest('.more-menu')&&!e.target.closest('.more-dots')&&!e.target.closest('.sidebar-nav-item'))moreMenu?.setAttribute('hidden','');});
+    applySettings();
+    if(window.KRISHTI_USER) window.loadKrishtiSettings();
 })();

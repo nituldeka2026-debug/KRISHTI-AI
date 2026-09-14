@@ -1,6 +1,7 @@
 const http = require("http");
 const fs = require("fs");
 const path = require("path");
+const crypto = require("crypto");
 
 const {
     saveMemory,
@@ -45,6 +46,87 @@ const MAX_MESSAGE_LENGTH =
 
 const MAX_BODY_SIZE =
     15 * 1024 * 1024;
+
+/* =========================================================
+   KRISHTI SETTINGS + FEEDBACK STORAGE
+========================================================= */
+
+const DATA_DIR = path.join(ROOT, "data");
+const SETTINGS_FILE = path.join(DATA_DIR, "settings.json");
+const FEEDBACK_FILE = path.join(DATA_DIR, "feedback.json");
+
+const DEFAULT_SETTINGS = {
+    profile: { displayName: "Krishti User", aiNickname: "Krishti" },
+    personality: { style: "Friendly", customInstructions: "" },
+    preferences: { language: "Auto", responseLength: "Balanced" },
+    brain: { memoryEnabled: true, recallEnabled: true, knowledgeEnabled: true },
+    experience: { theme: "dark", accent: "#8b5cf6", compactMode: false, sendWithEnter: true, voiceReply: false, voiceRate: 1 },
+    tools: { webEnabled: true, imageEnabled: true, documentEnabled: true, pluginsEnabled: false },
+    trust: { saveConversations: true, localAnalytics: false, safeMode: true },
+    app: { mobileOptimized: true, notifications: true, offlineMode: true, autoUpdate: true }
+};
+
+function ensureDataStore(){
+    fs.mkdirSync(DATA_DIR, { recursive: true });
+    if(!fs.existsSync(SETTINGS_FILE)) fs.writeFileSync(SETTINGS_FILE, JSON.stringify({}, null, 2));
+    if(!fs.existsSync(FEEDBACK_FILE)) fs.writeFileSync(FEEDBACK_FILE, JSON.stringify([], null, 2));
+}
+function readJsonFile(file, fallback){
+    try { return JSON.parse(fs.readFileSync(file, "utf8")); } catch { return fallback; }
+}
+function writeJsonFile(file, value){
+    ensureDataStore();
+    const tmp = file + ".tmp";
+    fs.writeFileSync(tmp, JSON.stringify(value, null, 2));
+    fs.renameSync(tmp, file);
+}
+function mergeSettings(base, incoming){
+    const out = { ...base };
+    for(const key of Object.keys(incoming || {})){
+        if(incoming[key] && typeof incoming[key] === "object" && !Array.isArray(incoming[key]) && base[key] && typeof base[key] === "object") out[key] = mergeSettings(base[key], incoming[key]);
+        else if(incoming[key] !== undefined) out[key] = incoming[key];
+    }
+    return out;
+}
+function settingsUserKey(raw){
+    const value = String(raw || "local-user").trim();
+    return crypto.createHash("sha256").update(value).digest("hex");
+}
+function handleSettings(req, res){
+    try{
+        ensureDataStore();
+        if(req.method === "GET") {
+            const url = new URL(req.url, `http://${req.headers.host || "localhost"}`);
+            const key = settingsUserKey(url.searchParams.get("user"));
+            const all = readJsonFile(SETTINGS_FILE, {});
+            const settings = mergeSettings(DEFAULT_SETTINGS, all[key] || {});
+            return sendJSON(res, 200, { success:true, settings, version:14 });
+        }
+        return readRequestBody(req).then(body=>{
+            let data; try { data=JSON.parse(body); } catch { return sendJSON(res,400,{success:false,error:"Invalid JSON request."}); }
+            const key=settingsUserKey(data.user);
+            const all=readJsonFile(SETTINGS_FILE,{});
+            all[key]=mergeSettings(DEFAULT_SETTINGS,data.settings || {});
+            writeJsonFile(SETTINGS_FILE,all);
+            return sendJSON(res,200,{success:true,settings:all[key],version:14});
+        });
+    }catch(error){ console.error("Settings API error:",error); return sendJSON(res,500,{success:false,error:"Could not load Krishti settings."}); }
+}
+function handleFeedback(req,res){
+    return readRequestBody(req).then(body=>{
+        try{
+            const data=JSON.parse(body);
+            const message=String(data.message||"").trim();
+            if(!message) return sendJSON(res,400,{success:false,error:"Feedback message is required."});
+            ensureDataStore();
+            const items=readJsonFile(FEEDBACK_FILE,[]);
+            items.push({id:crypto.randomUUID(),user:settingsUserKey(data.user),type:String(data.type||"feedback"),message:message.slice(0,5000),createdAt:new Date().toISOString()});
+            writeJsonFile(FEEDBACK_FILE,items.slice(-1000));
+            return sendJSON(res,200,{success:true});
+        }catch{ return sendJSON(res,400,{success:false,error:"Invalid feedback request."}); }
+    });
+}
+
 
 
 /* =========================================================
@@ -1208,6 +1290,17 @@ const server =
         }
 
 
+
+
+            if ((req.method === "GET" || req.method === "PUT") && pathname === "/api/settings") {
+                handleSettings(req, res);
+                return;
+            }
+
+            if (req.method === "POST" && pathname === "/api/feedback") {
+                handleFeedback(req, res);
+                return;
+            }
 
             /* =====================================
                STATIC WEBSITE
