@@ -11,7 +11,28 @@ try {
         let credential;
         if (process.env.FIREBASE_SERVICE_ACCOUNT_JSON) {
             credential = admin.credential.cert(JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_JSON));
-        } else if (process.env.FIREBASE_CLIENT_EMAIL && process.env.FIREBASE_PRIVATE_KEY) {
+        } else {
+            // Render Secret Files are mounted at /etc/secrets/<filename>.
+            // Support an explicit path plus the default filename used by Krishti V15.
+            const secretCandidates = [
+                process.env.FIREBASE_SERVICE_ACCOUNT_FILE,
+                "/etc/secrets/firebase-service-account.json",
+                path.join(__dirname, "firebase-service-account.json")
+            ].filter(Boolean);
+            for (const secretPath of secretCandidates) {
+                try {
+                    if (fs.existsSync(secretPath)) {
+                        const raw = fs.readFileSync(secretPath, "utf8");
+                        credential = admin.credential.cert(JSON.parse(raw));
+                        console.log(`Firebase Admin credentials loaded from secret file: ${secretPath}`);
+                        break;
+                    }
+                } catch (fileError) {
+                    console.warn(`Could not load Firebase service-account file ${secretPath}: ${fileError.message}`);
+                }
+            }
+        }
+        if (!credential && process.env.FIREBASE_CLIENT_EMAIL && process.env.FIREBASE_PRIVATE_KEY) {
             credential = admin.credential.cert({
                 projectId: process.env.FIREBASE_PROJECT_ID || "krishti-ai",
                 clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
@@ -195,10 +216,40 @@ function handleActivity(req,res){
         }catch(error){ return sendJSON(res,error.statusCode || 401,{success:false,error:error.message || "Activity request failed."}); }
     });
 }
+async function getFirebaseUsers(){
+    if(!firebaseAdminAuth) throw Object.assign(new Error("Firebase Admin SDK is not configured on the server."), { statusCode: 503 });
+    const result=[];
+    let pageToken;
+    do {
+        const page=await firebaseAdminAuth.listUsers(1000, pageToken);
+        result.push(...page.users);
+        pageToken=page.pageToken;
+    } while(pageToken);
+    return result;
+}
+
 async function handleAdminStats(req,res){
     try{
         await requireAdmin(req);
-        const users=Object.values(readJsonFile(USERS_FILE,{}));
+        const firebaseUsers=await getFirebaseUsers();
+        const activity=readJsonFile(USERS_FILE,{});
+        const users=firebaseUsers.map(u=>{
+            const a=activity[u.uid] || {};
+            return {
+                uid:u.uid,
+                email:u.email || a.email || "",
+                displayName:u.displayName || a.displayName || "",
+                photoURL:u.photoURL || a.photoURL || "",
+                createdAt:u.metadata?.creationTime || a.createdAt || null,
+                lastLoginAt:u.metadata?.lastSignInTime || null,
+                lastSeen:a.lastSeen || u.metadata?.lastSignInTime || null,
+                totalChats:a.totalChats||0,
+                totalImages:a.totalImages||0,
+                totalSearches:a.totalSearches||0,
+                totalDocuments:a.totalDocuments||0,
+                totalActions:a.totalActions||0
+            };
+        });
         const now=Date.now();
         const day=24*60*60*1000;
         const activeWindow=15*60*1000;

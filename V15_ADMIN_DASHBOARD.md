@@ -11,16 +11,20 @@
 ## Required Render setup for secure admin analytics
 The project uses Firebase Admin SDK on the Node server. Do **not** put a service-account JSON file into the ZIP or frontend.
 
-On Render, add these environment variables:
+On Render, the easiest setup is a **Secret File**:
 
+- Render → `krishti-ai-1` → Environment → Secret Files → Add Secret File
+- Filename: `firebase-service-account.json`
+- Contents: paste the complete Firebase service-account JSON
+
+Render mounts secret files at `/etc/secrets/<filename>` at runtime. This V15 build automatically reads `/etc/secrets/firebase-service-account.json`. You can also use `FIREBASE_SERVICE_ACCOUNT_FILE` for a custom path.
+
+Alternative environment-variable setup is still supported:
 - `KRISHTI_ADMIN_EMAIL` = `nitul.deka2026@gmail.com`
 - `FIREBASE_PROJECT_ID` = `krishti-ai`
-- `FIREBASE_CLIENT_EMAIL` = the `client_email` from your Firebase service-account JSON
-- `FIREBASE_PRIVATE_KEY` = the `private_key` from the same JSON. Paste it as a Render secret; escaped `\\n` is supported.
-
-Alternatively, set one secret:
-
-- `FIREBASE_SERVICE_ACCOUNT_JSON` = the complete service-account JSON as one-line JSON.
+- `FIREBASE_CLIENT_EMAIL` = `client_email` from the service-account JSON
+- `FIREBASE_PRIVATE_KEY` = `private_key` from the same JSON
+- or `FIREBASE_SERVICE_ACCOUNT_JSON` = complete service-account JSON
 
 Get the service account from Firebase Console → Project settings → Service accounts → Generate new private key.
 
@@ -33,3 +37,8 @@ Get the service account from Firebase Console → Project settings → Service a
 4. Other Google accounts will see **My Dashboard** only.
 
 If the server credentials are missing, the app still works normally, but the secure admin analytics endpoint will show a setup message instead of user data.
+
+## V15.1 Firebase Admin fix
+- Automatically reads Render Secret File `/etc/secrets/firebase-service-account.json`.
+- Admin statistics now use Firebase Authentication `listUsers()` for the real registered-user count, merged with Krishti activity metrics.
+- Normal users still cannot call the admin statistics endpoint because the server verifies the Firebase ID token and admin email.
