@@ -294,6 +294,9 @@ let chats = [];
 let currentChatId = null;
 let currentMessages = [];
 let historySearchOpen = false;
+let activeKrishtiMode = localStorage.getItem("krishti_ai_mode") || "smart";
+const MEMORY_KEY = "krishti_ai_memory_v1_";
+const LIBRARY_KEY = "krishti_ai_library_v1_";
 let restoringChat = false;
 
 function loadHistory() {
@@ -306,6 +309,23 @@ function loadHistory() {
         chats = [];
     }
 }
+
+function getMemoryKey(){ return MEMORY_KEY + (window.KRISHTI_USER?.uid || "guest"); }
+function getLocalMemory(){ try{return JSON.parse(localStorage.getItem(getMemoryKey())||"[]");}catch{return [];} }
+function saveLocalMemory(items){ try{localStorage.setItem(getMemoryKey(),JSON.stringify(items.slice(-50)));}catch{}}
+function rememberFromText(text){
+    const t=String(text||"").trim();
+    const m=t.match(/^(?:remember|please remember|note that)\s*[:,-]?\s*(.+)$/i);
+    if(!m) return false;
+    const items=getLocalMemory(); items.push({text:m[1].trim().slice(0,300),time:Date.now()}); saveLocalMemory(items);
+    addMessage("🧠 Moi eta kotha memory-t save korilu.","ai"); return true;
+}
+function getLibraryKey(){return LIBRARY_KEY+(window.KRISHTI_USER?.uid||"guest");}
+function getLibrary(){try{return JSON.parse(localStorage.getItem(getLibraryKey())||"[]");}catch{return []}}
+function saveLibrary(items){try{localStorage.setItem(getLibraryKey(),JSON.stringify(items.slice(-100)));}catch{}}
+function addLibraryItem(type,title,meta=""){const a=getLibrary();a.unshift({id:Date.now()+Math.random(),type,title,meta,time:Date.now()});saveLibrary(a);renderLibrary();}
+function renderLibrary(){const el=document.getElementById("libraryList");if(!el)return;const a=getLibrary();el.innerHTML=a.length?a.map(i=>`<div class="library-item"><span>${i.type==="image"?"🖼️":i.type==="chat"?"💬":"📌"}</span><div><strong>${escapeHtml(i.title)}</strong><small>${escapeHtml(i.meta||new Date(i.time).toLocaleString())}</small></div></div>`).join(""):"<div class='history-empty'>Library empty. Export a backup or create content to see items here.</div>";}
+function escapeHtml(v){const d=document.createElement("div");d.textContent=String(v??"");return d.innerHTML;}
 
 function saveHistory() {
     try {
@@ -675,6 +695,7 @@ async function sendMessage(customMessage = null) {
                 return;
             }
             addImageMessage(data.image, data.mimeType || "image/png");
+            addLibraryItem("image", "Generated image", `${mode || "create"} mode`);
         } catch (error) {
             console.error("Image generation error:", error);
             if (typing) typing.remove();
@@ -785,6 +806,8 @@ async function sendMessage(customMessage = null) {
     setSendingState(true);
 
     try {
+        const modeInstruction = activeKrishtiMode === "fast" ? "Answer quickly and concisely." : activeKrishtiMode === "deep" ? "Reason carefully, verify assumptions, and provide a thorough answer." : activeKrishtiMode === "creative" ? "Be creative, original, and idea-rich while staying accurate." : activeKrishtiMode === "research" ? "Act like a web research assistant; prioritize current, sourced information." : "Be helpful, balanced, clear, and practical.";
+        const enrichedMessage = `[Krishti ${activeKrishtiMode} mode] ${modeInstruction}\n\nUser: ${message}`;
         const response = await fetch("/api/chat", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -1605,6 +1628,41 @@ sidebarToggle?.addEventListener("click", (event) => {
 sidebarClose?.addEventListener("click", closeSidebar);
 sidebarOverlay?.addEventListener("click", closeSidebar);
 mobileNewChat?.addEventListener("click", () => { startFreshChat(true); closeSidebar(); });
+
+
+// =========================================================
+// V13 CORE UPGRADE
+// =========================================================
+const modePicker=document.getElementById("modePicker");
+const libraryView=document.getElementById("libraryView");
+function setKrishtiMode(mode){activeKrishtiMode=mode;localStorage.setItem("krishti_ai_mode",mode);if(modePicker)modePicker.hidden=true;if(modeIndicator){modeIndicator.hidden=false;modeIndicator.textContent={fast:"⚡ Fast mode",smart:"✨ Smart mode",deep:"🧠 Deep mode",creative:"🎨 Creative mode",research:"🌐 Web Research mode"}[mode]||"✨ Smart mode";}showToast(`Krishti ${mode} mode selected`);}
+modePicker?.addEventListener("click",e=>{const b=e.target.closest("button[data-mode]");if(b)setKrishtiMode(b.dataset.mode);});
+document.querySelector('[data-attach="modes"]')?.addEventListener("click",()=>{if(modePicker)modePicker.hidden=false;});
+function openLibrary(){renderLibrary();if(libraryView)libraryView.hidden=false;}
+document.getElementById("libraryButton")?.addEventListener("click",openLibrary);
+document.getElementById("libraryClose")?.addEventListener("click",()=>{if(libraryView)libraryView.hidden=true;});
+function downloadJson(filename,obj){const blob=new Blob([JSON.stringify(obj,null,2)],{type:"application/json"});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=filename;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);}
+document.getElementById("exportKrishti")?.addEventListener("click",()=>downloadJson("krishti-ai-backup.json",{version:13,exportedAt:new Date().toISOString(),chats,memory:getLocalMemory(),library:getLibrary(),mode:activeKrishtiMode}));
+document.getElementById("importKrishti")?.addEventListener("click",()=>document.getElementById("importKrishtiInput")?.click());
+document.getElementById("importKrishtiInput")?.addEventListener("change",async e=>{const f=e.target.files?.[0];if(!f)return;try{const data=JSON.parse(await f.text());if(Array.isArray(data.chats)){chats=data.chats;saveHistory();renderHistory();}if(Array.isArray(data.memory))saveLocalMemory(data.memory);if(Array.isArray(data.library))saveLibrary(data.library);if(data.mode)setKrishtiMode(data.mode);showToast("Krishti backup imported");}catch{showToast("Invalid Krishti backup file");}e.target.value="";});
+
+// Pin/archive controls are stored with each chat.
+const oldRenderHistory=renderHistory;
+renderHistory=function(filter=""){oldRenderHistory(filter);document.querySelectorAll(".history-item").forEach(row=>{const title=row.querySelector(".history-item-title")?.textContent;const chat=chats.find(c=>c.title===title);if(chat?.pinned)row.classList.add("pinned");});};
+
+// Voice: speech recognition input + spoken Krishti replies.
+let krishtiRecognitionV13=null;
+if(voiceButton&&typeof SpeechRecognition!=="undefined"){krishtiRecognitionV13=new SpeechRecognition();krishtiRecognitionV13.lang="en-IN";krishtiRecognitionV13.interimResults=false;krishtiRecognitionV13.maxAlternatives=1;krishtiRecognitionV13.onresult=e=>{const text=e.results?.[0]?.[0]?.transcript||"";if(userInput){userInput.value+=(userInput.value?" ":"")+text;autoResizeInput();}};krishtiRecognitionV13.onerror=()=>showToast("Voice input unavailable");voiceButton.addEventListener("click",()=>{try{krishtiRecognitionV13.start();showToast("Listening…");}catch{}});}
+function speakKrishti(text){if(!localStorage.getItem("krishti_voice_reply"))return;if("speechSynthesis" in window){speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(String(text).replace(/https?:\/\/\S+/g,"").slice(0,1200));u.lang="en-IN";speechSynthesis.speak(u);}}
+const originalAddMessage=addMessage;
+addMessage=function(text,sender){const r=originalAddMessage(text,sender);if(sender==="ai")speakKrishti(text);return r;};
+
+// Mobile drawer reliability: inline styles remove old CSS conflicts.
+function forceOpenSidebar(){if(sidebarEl){sidebarEl.classList.add("open");sidebarEl.style.transform="translateX(0)";sidebarEl.style.visibility="visible";}sidebarOverlay?.classList.add("show");}
+function forceCloseSidebar(){if(sidebarEl){sidebarEl.classList.remove("open");sidebarEl.style.transform="translateX(-105%)";}sidebarOverlay?.classList.remove("show");}
+sidebarToggle?.addEventListener("click",forceOpenSidebar,true);
+sidebarOverlay?.addEventListener("click",forceCloseSidebar,true);
+renderLibrary();
 
 // =========================================================
 // STARTUP

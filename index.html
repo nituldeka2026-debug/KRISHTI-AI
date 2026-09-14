@@ -66,12 +66,12 @@
     </button>
 
     <nav class="sidebar-nav" aria-label="Main navigation">
-      <button class="sidebar-nav-item" type="button"><span class="nav-icon">▧</span><span>Images</span><span class="nav-badge">UPDATED</span></button>
-      <button class="sidebar-nav-item" type="button"><span class="nav-icon">▥</span><span>Library</span></button>
+      <button class="sidebar-nav-item" id="imagesButton" type="button"><span class="nav-icon">▧</span><span>Images</span><span class="nav-badge">UPDATED</span></button>
+      <button class="sidebar-nav-item" id="libraryButton" type="button"><span class="nav-icon">▥</span><span>Library</span></button>
       <button class="sidebar-nav-item" type="button"><span class="nav-icon">◷</span><span>Scheduled</span></button>
       <button class="sidebar-nav-item" type="button"><span class="nav-icon">◎</span><span>Plugins</span></button>
-      <button class="sidebar-nav-item" type="button"><span class="nav-icon">□</span><span>Projects</span></button>
-      <button class="sidebar-nav-item" type="button"><span class="nav-icon">◇</span><span>Codex</span></button>
+      <button class="sidebar-nav-item" id="projectsButton" type="button"><span class="nav-icon">□</span><span>Projects</span></button>
+      <button class="sidebar-nav-item" id="codexButton" type="button"><span class="nav-icon">◇</span><span>Codex</span></button>
       <button class="sidebar-nav-item" type="button"><span class="nav-icon more-dots">•••</span><span>More</span></button>
       <div class="more-menu" id="moreMenu" hidden>
         <button type="button" data-more="Tasks">✓ Tasks</button>
@@ -199,6 +199,7 @@
             <button type="button" data-attach="web"><span>🌐</span><strong>Web Search</strong><small>Search current information</small></button>
             <button type="button" data-attach="plugins"><span>🔌</span><strong>Plugins</strong><small>Connected tools</small></button>
             <button type="button" data-attach="think"><span>🧠</span><strong>Think harder</strong><small>Use deeper reasoning</small></button>
+            <button type="button" data-attach="modes"><span>🚀</span><strong>Krishti Modes</strong><small>Fast, Smart, Deep & Creative</small></button>
         </div>
 
         <form class="input-area" autocomplete="off" id="chatForm">
@@ -209,6 +210,7 @@
         </form>
 
         <div id="modeIndicator" class="mode-indicator" hidden>🌐 Web Search mode</div>
+        <div id="modePicker" class="mode-picker" hidden><button data-mode="fast">⚡ Fast</button><button data-mode="smart">✨ Smart</button><button data-mode="deep">🧠 Deep</button><button data-mode="creative">🎨 Creative</button><button data-mode="research">🌐 Web Research</button></div>
         <div class="composer-hint">Krishti AI can make mistakes. Check important information.</div>
     </div>
 
@@ -245,6 +247,8 @@
   </div>
 </section>
 
+<section id="libraryView" class="utility-view" hidden aria-label="Krishti Library"><div class="utility-card"><div class="utility-head"><div><h2>📁 Krishti Library</h2><p>Your saved chat backups, notes and generated items on this device.</p></div><button id="libraryClose" type="button">×</button></div><div class="library-actions"><button id="exportKrishti">Export backup</button><button id="importKrishti">Import backup</button><input id="importKrishtiInput" type="file" accept="application/json" hidden></div><div id="libraryList" class="library-list"></div></div></section>
+
 <div id="profileMenu" class="profile-menu" hidden>
   <div class="profile-menu-title">Krishti AI</div>
   <div id="profileMenuEmail" class="profile-menu-email">Signed in</div>
@@ -259,6 +263,7 @@
 </div>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+<link rel="manifest" href="manifest.webmanifest">
 <script src="script.js"></script>
 </body>
 </html>
