@@ -1,7 +1,7 @@
 {
   "name": "krishti-ai",
-  "version": "14.2.0",
-  "description": "Krishti AI with robust Firebase email, Google and phone OTP authentication.",
+  "version": "15.0.0",
+  "description": "Krishti AI with Firebase auth, secure admin dashboard and user analytics.",
   "main": "server.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
@@ -15,6 +15,7 @@
     "@google/genai": "^2.22.0",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
-    "express": "^5.2.1"
+    "express": "^5.2.1",
+    "firebase-admin": "^13.5.0"
   }
 }

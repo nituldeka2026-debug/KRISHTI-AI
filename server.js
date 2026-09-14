@@ -3,6 +3,28 @@ const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
 
+// Optional Firebase Admin SDK for secure admin/user analytics.
+let firebaseAdminAuth = null;
+try {
+    const admin = require("firebase-admin");
+    if (!admin.apps.length) {
+        let credential;
+        if (process.env.FIREBASE_SERVICE_ACCOUNT_JSON) {
+            credential = admin.credential.cert(JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_JSON));
+        } else if (process.env.FIREBASE_CLIENT_EMAIL && process.env.FIREBASE_PRIVATE_KEY) {
+            credential = admin.credential.cert({
+                projectId: process.env.FIREBASE_PROJECT_ID || "krishti-ai",
+                clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+                privateKey: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, "\n")
+            });
+        }
+        if (credential) admin.initializeApp({ credential });
+    }
+    if (admin.apps.length) firebaseAdminAuth = admin.auth();
+} catch (error) {
+    console.warn("Firebase Admin SDK not configured; admin analytics API is disabled until server credentials are added.");
+}
+
 const {
     saveMemory,
     getRecentMemory
@@ -54,6 +76,8 @@ const MAX_BODY_SIZE =
 const DATA_DIR = path.join(ROOT, "data");
 const SETTINGS_FILE = path.join(DATA_DIR, "settings.json");
 const FEEDBACK_FILE = path.join(DATA_DIR, "feedback.json");
+const USERS_FILE = path.join(DATA_DIR, "users.json");
+const ADMIN_EMAIL = String(process.env.KRISHTI_ADMIN_EMAIL || "nitul.deka2026@gmail.com").trim().toLowerCase();
 
 const DEFAULT_SETTINGS = {
     profile: { displayName: "Krishti User", aiNickname: "Krishti" },
@@ -70,6 +94,7 @@ function ensureDataStore(){
     fs.mkdirSync(DATA_DIR, { recursive: true });
     if(!fs.existsSync(SETTINGS_FILE)) fs.writeFileSync(SETTINGS_FILE, JSON.stringify({}, null, 2));
     if(!fs.existsSync(FEEDBACK_FILE)) fs.writeFileSync(FEEDBACK_FILE, JSON.stringify([], null, 2));
+    if(!fs.existsSync(USERS_FILE)) fs.writeFileSync(USERS_FILE, JSON.stringify({}, null, 2));
 }
 function readJsonFile(file, fallback){
     try { return JSON.parse(fs.readFileSync(file, "utf8")); } catch { return fallback; }
@@ -127,6 +152,63 @@ function handleFeedback(req,res){
     });
 }
 
+
+
+async function verifyFirebaseRequest(req){
+    if(!firebaseAdminAuth) throw Object.assign(new Error("Firebase Admin SDK is not configured on the server."), { statusCode: 503 });
+    const header=String(req.headers.authorization || "");
+    if(!header.startsWith("Bearer ")) throw Object.assign(new Error("Missing Firebase ID token."), { statusCode: 401 });
+    return firebaseAdminAuth.verifyIdToken(header.slice(7));
+}
+async function requireAdmin(req){
+    const decoded=await verifyFirebaseRequest(req);
+    if(String(decoded.email || "").toLowerCase() !== ADMIN_EMAIL){
+        throw Object.assign(new Error("Admin access required."), { statusCode: 403 });
+    }
+    return decoded;
+}
+function recordUserActivity(user, action){
+    ensureDataStore();
+    const all=readJsonFile(USERS_FILE,{});
+    const uid=String(user.uid || "");
+    if(!uid) return;
+    const existing=all[uid] || { uid, createdAt:new Date().toISOString(), totalChats:0, totalImages:0, totalSearches:0, totalDocuments:0, totalActions:0 };
+    existing.email=String(user.email || existing.email || "");
+    existing.displayName=String(user.name || existing.displayName || "");
+    existing.photoURL=String(user.picture || existing.photoURL || "");
+    existing.lastSeen=new Date().toISOString();
+    existing.totalActions=(existing.totalActions||0)+1;
+    if(action === "chat") existing.totalChats=(existing.totalChats||0)+1;
+    if(action === "image") existing.totalImages=(existing.totalImages||0)+1;
+    if(action === "search") existing.totalSearches=(existing.totalSearches||0)+1;
+    if(action === "document") existing.totalDocuments=(existing.totalDocuments||0)+1;
+    all[uid]=existing;
+    writeJsonFile(USERS_FILE,all);
+}
+function handleActivity(req,res){
+    return readRequestBody(req).then(async body=>{
+        try{
+            const data=JSON.parse(body);
+            const decoded=await verifyFirebaseRequest(req);
+            recordUserActivity({uid:decoded.uid,email:decoded.email,name:decoded.name,picture:decoded.picture}, String(data.action||"login"));
+            return sendJSON(res,200,{success:true});
+        }catch(error){ return sendJSON(res,error.statusCode || 401,{success:false,error:error.message || "Activity request failed."}); }
+    });
+}
+async function handleAdminStats(req,res){
+    try{
+        await requireAdmin(req);
+        const users=Object.values(readJsonFile(USERS_FILE,{}));
+        const now=Date.now();
+        const day=24*60*60*1000;
+        const activeWindow=15*60*1000;
+        const activeUsers=users.filter(u=>u.lastSeen && now-Date.parse(u.lastSeen) <= activeWindow).length;
+        const dailyUsers=users.filter(u=>u.lastSeen && now-Date.parse(u.lastSeen) <= day).length;
+        const totals=users.reduce((a,u)=>{a.chats+=(u.totalChats||0);a.images+=(u.totalImages||0);a.searches+=(u.totalSearches||0);a.documents+=(u.totalDocuments||0);return a;},{chats:0,images:0,searches:0,documents:0});
+        users.sort((a,b)=>Date.parse(b.lastSeen||0)-Date.parse(a.lastSeen||0));
+        return sendJSON(res,200,{success:true,adminEmail:ADMIN_EMAIL,totalUsers:users.length,activeUsers,dailyUsers,totals,users:users.slice(0,200)});
+    }catch(error){ return sendJSON(res,error.statusCode || 500,{success:false,error:error.message || "Could not load admin dashboard."}); }
+}
 
 
 /* =========================================================
@@ -1291,6 +1373,16 @@ const server =
 
 
 
+
+            if (req.method === "POST" && pathname === "/api/activity") {
+                handleActivity(req,res);
+                return;
+            }
+
+            if (req.method === "GET" && pathname === "/api/admin/stats") {
+                handleAdminStats(req,res);
+                return;
+            }
 
             if ((req.method === "GET" || req.method === "PUT") && pathname === "/api/settings") {
                 handleSettings(req, res);

@@ -224,6 +224,21 @@
         <div class="composer-hint">Krishti AI can make mistakes. Check important information.</div>
     </div>
 
+<section id="dashboardView" class="dashboard-view" hidden aria-label="Krishti Dashboard">
+  <div class="dashboard-shell">
+    <div class="dashboard-head"><div><span class="eyebrow">KRISHTI SPACE</span><h2 id="dashboardTitle">My Dashboard</h2><p id="dashboardSubtitle">Your personal Krishti activity at a glance.</p></div><button id="dashboardClose" type="button" class="dashboard-close">×</button></div>
+    <div id="generalDashboard" class="dashboard-grid" hidden>
+      <div class="dash-card"><span>💬</span><strong id="myChats">—</strong><small>Chats</small></div><div class="dash-card"><span>🖼️</span><strong id="myImages">—</strong><small>Images</small></div><div class="dash-card"><span>🌐</span><strong id="mySearches">—</strong><small>Web searches</small></div><div class="dash-card"><span>📄</span><strong id="myDocuments">—</strong><small>Documents</small></div>
+      <div class="dashboard-panel wide"><h3>👤 My Krishti Profile</h3><div class="profile-dashboard-row"><div id="myDashAvatar" class="dash-avatar">K</div><div><strong id="myDashName">Krishti User</strong><p id="myDashEmail">Signed in</p><small id="myDashLastSeen">Last activity: —</small></div></div></div>
+    </div>
+    <div id="adminDashboard" hidden>
+      <div class="admin-lock">🔐 Admin Control Center · <span id="adminEmailLabel">—</span></div>
+      <div class="dashboard-grid"><div class="dash-card admin"><span>👥</span><strong id="adminTotalUsers">—</strong><small>Total Users</small></div><div class="dash-card admin"><span>🟢</span><strong id="adminActiveUsers">—</strong><small>Active Now</small></div><div class="dash-card admin"><span>📅</span><strong id="adminDailyUsers">—</strong><small>Active Today</small></div><div class="dash-card admin"><span>💬</span><strong id="adminTotalChats">—</strong><small>Total Chats</small></div><div class="dash-card admin"><span>🖼️</span><strong id="adminTotalImages">—</strong><small>Images</small></div><div class="dash-card admin"><span>🌐</span><strong id="adminTotalSearches">—</strong><small>Web Searches</small></div><div class="dash-card admin"><span>📄</span><strong id="adminTotalDocuments">—</strong><small>Documents</small></div></div>
+      <div class="dashboard-panel"><div class="panel-head"><div><h3>👥 Users</h3><small>Only visible to the Krishti admin account.</small></div><button id="adminRefresh" type="button">↻ Refresh</button></div><div class="admin-table-wrap"><table class="admin-table"><thead><tr><th>User</th><th>Email</th><th>Last active</th><th>Chats</th><th>Images</th><th>Searches</th></tr></thead><tbody id="adminUsersTable"></tbody></table></div></div>
+    </div>
+  </div>
+</section>
+
 <section id="settingsView" class="settings-view" hidden aria-label="Krishti Settings">
   <div class="settings-shell">
     <aside class="settings-nav">

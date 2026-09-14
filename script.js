@@ -321,6 +321,68 @@ showApp = function(user) {
     }
 };
 
+
+// =========================================================
+// KRISHTI V15 — USER + ADMIN DASHBOARD
+// =========================================================
+const KRISHTI_ADMIN_EMAIL = "nitul.deka2026@gmail.com";
+function isKrishtiAdmin(user = window.KRISHTI_USER) {
+    return String(user?.email || "").trim().toLowerCase() === KRISHTI_ADMIN_EMAIL;
+}
+async function recordActivity(action="login") {
+    try {
+        if (!firebaseAuth?.currentUser) return;
+        const token = await firebaseAuth.currentUser.getIdToken();
+        await fetch("/api/activity", { method:"POST", headers:{"Content-Type":"application/json", "Authorization":"Bearer "+token}, body:JSON.stringify({action}) });
+    } catch (e) { console.debug("Krishti activity tracking unavailable", e); }
+}
+function addDashboardButton() {
+    const bottom=document.querySelector(".sidebar-bottom");
+    if(!bottom || document.getElementById("dashboardButton")) return;
+    const btn=document.createElement("button"); btn.id="dashboardButton"; btn.type="button"; btn.className="settings-button dashboard-button";
+    btn.textContent=isKrishtiAdmin()?"📊 Admin Dashboard":"👤 My Dashboard";
+    btn.addEventListener("click",openKrishtiDashboard); bottom.insertBefore(btn,bottom.querySelector(".settings-button"));
+}
+function closeKrishtiDashboard(){ document.getElementById("dashboardView")?.setAttribute("hidden",""); }
+async function openKrishtiDashboard(){
+    const view=document.getElementById("dashboardView"); if(!view) return;
+    view.hidden=false;
+    const admin=isKrishtiAdmin();
+    document.getElementById("generalDashboard").hidden=admin;
+    document.getElementById("adminDashboard").hidden=!admin;
+    document.getElementById("dashboardTitle").textContent=admin?"Admin Dashboard":"My Dashboard";
+    document.getElementById("dashboardSubtitle").textContent=admin?"Krishti control center for users and usage.":"Your personal Krishti activity at a glance.";
+    if(admin) await loadAdminDashboard(); else await loadMyDashboard();
+}
+async function loadMyDashboard(){
+    const u=window.KRISHTI_USER;
+    document.getElementById("myDashName").textContent=u?.displayName || "Krishti User";
+    document.getElementById("myDashEmail").textContent=u?.email || "Signed in";
+    document.getElementById("myDashLastSeen").textContent="Last activity: just now";
+    const avatar=document.getElementById("myDashAvatar");
+    if(u?.photoURL) avatar.innerHTML=`<img src="${u.photoURL}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`; else avatar.textContent=(u?.displayName||u?.email||"K").charAt(0).toUpperCase();
+    // Counts are stored locally for the personal view; no other users are exposed.
+    const key="krishti_usage_"+(u?.uid||u?.email||"local"); const usage=JSON.parse(localStorage.getItem(key)||"{}");
+    document.getElementById("myChats").textContent=usage.chats||0; document.getElementById("myImages").textContent=usage.images||0; document.getElementById("mySearches").textContent=usage.searches||0; document.getElementById("myDocuments").textContent=usage.documents||0;
+}
+function bumpPersonalUsage(action){
+    const u=window.KRISHTI_USER; if(!u) return; const key="krishti_usage_"+(u.uid||u.email||"local"); const x=JSON.parse(localStorage.getItem(key)||"{}"); const map={chat:"chats",image:"images",search:"searches",document:"documents"}; if(map[action]) x[map[action]]=(x[map[action]]||0)+1; localStorage.setItem(key,JSON.stringify(x));
+}
+function fmtLastSeen(value){ if(!value) return "—"; const d=new Date(value), diff=Date.now()-d.getTime(); if(diff<60000) return "Just now"; if(diff<3600000) return Math.floor(diff/60000)+"m ago"; if(diff<86400000) return Math.floor(diff/3600000)+"h ago"; return d.toLocaleDateString(); }
+async function loadAdminDashboard(){
+    const tbody=document.getElementById("adminUsersTable"); if(tbody) tbody.innerHTML='<tr><td colspan="6">Loading secure admin data…</td></tr>';
+    try{
+        const token=await firebaseAuth.currentUser.getIdToken(true); const r=await fetch("/api/admin/stats",{headers:{Authorization:"Bearer "+token},cache:"no-store"}); const data=await r.json(); if(!r.ok) throw new Error(data.error||"Admin dashboard unavailable");
+        document.getElementById("adminEmailLabel").textContent=data.adminEmail||KRISHTI_ADMIN_EMAIL; document.getElementById("adminTotalUsers").textContent=data.totalUsers; document.getElementById("adminActiveUsers").textContent=data.activeUsers; document.getElementById("adminDailyUsers").textContent=data.dailyUsers; document.getElementById("adminTotalChats").textContent=data.totals.chats; document.getElementById("adminTotalImages").textContent=data.totals.images; document.getElementById("adminTotalSearches").textContent=data.totals.searches; document.getElementById("adminTotalDocuments").textContent=data.totals.documents;
+        if(tbody) tbody.innerHTML=data.users.length?data.users.map(u=>`<tr><td><div class="admin-user-name">${escapeHtml(u.displayName||"Unnamed user")}</div><div class="admin-user-meta">${escapeHtml(u.uid||"")}</div></td><td>${escapeHtml(u.email||"—")}</td><td>${fmtLastSeen(u.lastSeen)}</td><td>${u.totalChats||0}</td><td>${u.totalImages||0}</td><td>${u.totalSearches||0}</td></tr>`).join(""): '<tr><td colspan="6">No user activity recorded yet.</td></tr>';
+    }catch(e){ if(tbody) tbody.innerHTML=`<tr><td colspan="6">${escapeHtml(e.message)}<br><small>Add Firebase Admin server credentials on Render to enable secure analytics.</small></td></tr>`; }
+}
+function escapeHtml(v){return String(v).replace(/[&<>'"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;","\"":"&quot;"}[c]));}
+document.getElementById("dashboardClose")?.addEventListener("click",closeKrishtiDashboard);
+document.getElementById("adminRefresh")?.addEventListener("click",loadAdminDashboard);
+const oldAddAccountControls=addAccountControls;
+addAccountControls=function(){ oldAddAccountControls(); addDashboardButton(); recordActivity("login"); };
+const oldSendPhone=sendPhoneOTP;
 initAuth();
 
 // =========================================================
@@ -812,6 +874,7 @@ async function sendMessage(customMessage = null) {
         const typing = showTyping();
         setSendingState(true);
         try {
+            bumpPersonalUsage("image"); recordActivity("image");
             const response = await fetch("/api/image-generate", {
                 method: "POST", headers: {"Content-Type":"application/json"},
                 body: JSON.stringify({prompt, era: mode})
@@ -850,6 +913,7 @@ async function sendMessage(customMessage = null) {
 
         try {
             const payload = await fileToGeminiPayload(image);
+            bumpPersonalUsage("image"); recordActivity("image");
             const response = await fetch("/api/image-edit", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -897,6 +961,7 @@ async function sendMessage(customMessage = null) {
         const typing = showTyping();
         setSendingState(true);
         try {
+            bumpPersonalUsage("search"); recordActivity("search");
             const response = await fetch("/api/search", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -944,6 +1009,7 @@ async function sendMessage(customMessage = null) {
             ks.brain?.memoryEnabled === false ? 'Do not use saved personalization memory.' : ''
         ].filter(Boolean).join('\n');
         const enrichedMessage = `[Krishti ${activeKrishtiMode} mode] ${modeInstruction}\n${personalization ? `\n${personalization}\n` : ''}\nUser: ${message}`;
+        bumpPersonalUsage("chat"); recordActivity("chat");
         const response = await fetch("/api/chat", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
