@@ -1807,3 +1807,18 @@ body.light-mode .setting-select,body.light-mode .setting-input,body.light-mode .
   .setting-textarea{width:100%;max-width:none;box-sizing:border-box}
   .setting-input,.setting-select{width:100%;max-width:none;box-sizing:border-box}
 }
+
+/* =========================================================
+   V14.2 — ROBUST AUTH / PHONE OTP UI
+========================================================= */
+.phone-input-row{display:grid;grid-template-columns:108px 1fr;gap:8px;align-items:stretch}
+.phone-input-row select,.phone-input-row input{min-width:0;width:100%;height:46px;box-sizing:border-box;border:1px solid rgba(255,255,255,.12);background:#0f1420;color:#fff;border-radius:12px;padding:12px 13px;outline:none;font-size:14px}
+.phone-input-row select:focus,.phone-input-row input:focus{border-color:#6f7cff;box-shadow:0 0 0 3px rgba(111,124,255,.12)}
+.phone-login .auth-button{width:100%;border:0;border-radius:12px;padding:12px 14px;font-size:14px;font-weight:700;cursor:pointer;background:#fff;color:#10131b}
+.phone-login .auth-button.secondary{margin-top:9px}
+.phone-login .auth-button:disabled{opacity:.55;cursor:not-allowed}
+.auth-link-button{display:block;margin:9px auto 0;border:0;background:transparent;color:#aeb8ff;cursor:pointer;font-size:12px;padding:5px}
+.auth-link-button:disabled{opacity:.45;cursor:not-allowed}
+#recaptcha-container{display:flex;justify-content:center;margin-top:12px;overflow:hidden;border-radius:8px}
+#recaptcha-container:empty{display:none}
+@media(max-width:520px){.auth-screen{padding:12px}.auth-card{padding:28px 18px;border-radius:18px}.phone-input-row{grid-template-columns:100px 1fr}.phone-input-row select,.phone-input-row input{font-size:13px}}

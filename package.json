@@ -1,7 +1,7 @@
 {
   "name": "krishti-ai",
-  "version": "14.0.0",
-  "description": "Krishti AI with Firebase email/Google login, per-user local chat history, document support and natural-language photo editing.",
+  "version": "14.2.0",
+  "description": "Krishti AI with robust Firebase email, Google and phone OTP authentication.",
   "main": "server.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",

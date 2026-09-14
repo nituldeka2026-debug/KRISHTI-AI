@@ -47,8 +47,8 @@ function friendlyAuthError(error) {
     const map = {
         "auth/invalid-email": "Please enter a valid email address.",
         "auth/user-not-found": "No account was found with this email.",
-        "auth/wrong-password": "Incorrect password.",
-        "auth/invalid-credential": "Email or password is incorrect.",
+        "auth/wrong-password": "Incorrect password. If you created this account with Google, use Google login or create an email/password account.",
+        "auth/invalid-credential": "Email or password is incorrect. Check the password, or use Create an account if this email has no password login.",
         "auth/email-already-in-use": "An account already exists with this email.",
         "auth/weak-password": "Password should be at least 6 characters.",
         "auth/popup-closed-by-user": "Google sign-in was cancelled.",
@@ -59,75 +59,159 @@ function friendlyAuthError(error) {
         "auth/missing-phone-number": "Enter your mobile number first.",
         "auth/quota-exceeded": "SMS limit reached. Please try again later.",
         "auth/captcha-check-failed": "reCAPTCHA verification failed. Please try again.",
-        "auth/app-not-authorized": "This domain is not authorized in Firebase Authentication.",
+        "auth/app-not-authorized": "This website domain is not authorized in Firebase Authentication. Add the current domain in Firebase Authentication → Settings → Authorized domains.",
         "auth/code-expired": "That OTP has expired. Please request a new OTP.",
         "auth/invalid-verification-code": "The OTP is incorrect. Please check and try again.",
         "auth/provider-already-linked": "This sign-in method is already linked to the account.",
         "auth/account-exists-with-different-credential": "An account already exists with another sign-in method. Sign in with that method first.",
-        "auth/network-request-failed": "Network error. Check your internet connection and try again."
+        "auth/network-request-failed": "Network error. Check your internet connection and try again.",
+        "auth/missing-or-invalid-nonce": "Google sign-in could not be verified. Please try again.",
+        "auth/invalid-verification-id": "The OTP session expired. Request a new OTP."
     };
     return map[error?.code] || error?.message || "Authentication failed. Please try again.";
 }
 
 let recaptchaVerifier = null;
 let phoneConfirmationResult = null;
+let phoneLastNumber = "";
+let otpTimerId = null;
+let otpSeconds = 0;
 
-function setupRecaptcha() {
-    if (!firebaseConfigured() || recaptchaVerifier) return;
-    recaptchaVerifier = new firebase.auth.RecaptchaVerifier("recaptcha-container", {
+function resetRecaptcha() {
+    if (recaptchaVerifier) {
+        try { recaptchaVerifier.clear(); } catch {}
+    }
+    recaptchaVerifier = null;
+    const box = document.getElementById("recaptcha-container");
+    if (box) box.innerHTML = "";
+}
+
+async function setupRecaptcha() {
+    if (!firebaseAuth) throw new Error("Firebase authentication is not ready.");
+    resetRecaptcha();
+    const container = document.getElementById("recaptcha-container");
+    if (!container) throw new Error("reCAPTCHA container is missing.");
+    recaptchaVerifier = new firebase.auth.RecaptchaVerifier(container, {
         size: "normal",
-        callback: () => {}
-    }, firebaseAuth);
-    recaptchaVerifier.render().catch(() => {});
+        callback: () => clearAuthError(),
+        "expired-callback": () => showAuthError("reCAPTCHA expired. Please verify again."),
+        "error-callback": () => showAuthError("reCAPTCHA could not load. Check your internet connection and Firebase authorized domain.")
+    });
+    await recaptchaVerifier.render();
+    return recaptchaVerifier;
+}
+
+function getPhoneNumber() {
+    const code = (document.getElementById("phone-country")?.value || "+91").trim();
+    let number = (document.getElementById("phone-number")?.value || "").trim();
+    number = number.replace(/[\s()-]/g, "");
+    if (number.startsWith("+")) return number;
+    return code + number.replace(/^0+/, "");
+}
+
+function startOtpTimer(seconds = 30) {
+    clearInterval(otpTimerId);
+    otpSeconds = seconds;
+    const timer = document.getElementById("otpTimer");
+    const resend = document.getElementById("resendPhoneOtpButton");
+    if (resend) resend.disabled = true;
+    const tick = () => {
+        if (timer) timer.textContent = otpSeconds > 0 ? `(${otpSeconds}s)` : "";
+        if (otpSeconds <= 0) {
+            clearInterval(otpTimerId);
+            if (resend) resend.disabled = false;
+            return;
+        }
+        otpSeconds -= 1;
+    };
+    tick();
+    otpTimerId = setInterval(tick, 1000);
+}
+
+function setPhoneBusy(busy, buttonId) {
+    const button = document.getElementById(buttonId);
+    if (!button) return;
+    button.disabled = busy;
+    if (buttonId === "sendPhoneOtpButton") button.textContent = busy ? "Sending OTP…" : "📱 Send OTP";
+    if (buttonId === "verifyPhoneOtpButton") button.textContent = busy ? "Verifying…" : "Verify & Login";
 }
 
 async function sendPhoneOTP() {
-    if (!firebaseConfigured()) {
-        showToast("Firebase login is not configured.");
+    clearAuthError();
+    if (!firebaseConfigured() || !firebaseAuth) {
+        showAuthError("Firebase login is not ready. Please reload the page.");
         return;
     }
-    const phone = (document.getElementById("phone-number")?.value || "").trim();
+    const phone = getPhoneNumber();
     if (!/^\+\d{8,15}$/.test(phone)) {
-        showToast("Enter phone number with country code, e.g. +919876543210");
+        showAuthError("Enter a valid mobile number. For India, enter 10 digits after +91.");
+        document.getElementById("phone-number")?.focus();
         return;
     }
+    setPhoneBusy(true, "sendPhoneOtpButton");
     try {
-        setupRecaptcha();
-        phoneConfirmationResult =
-            await firebaseAuth.signInWithPhoneNumber(phone, recaptchaVerifier);
+        const verifier = await setupRecaptcha();
+        phoneConfirmationResult = await firebaseAuth.signInWithPhoneNumber(phone, verifier);
+        phoneLastNumber = phone;
         document.getElementById("phone-otp-section")?.classList.remove("hidden");
+        const otp = document.getElementById("phone-otp");
+        if (otp) { otp.value = ""; otp.focus(); }
+        startOtpTimer(30);
         showToast("OTP sent successfully.");
     } catch (error) {
-        console.error(error);
-        if (recaptchaVerifier) {
-            try { recaptchaVerifier.clear(); } catch {}
-            recaptchaVerifier = null;
-        }
-        showAuthError(mapFirebaseError(error));
-        showToast(mapFirebaseError(error));
+        console.error("Phone OTP error:", error);
+        phoneConfirmationResult = null;
+        resetRecaptcha();
+        showAuthError(friendlyAuthError(error));
+        showToast(friendlyAuthError(error));
+    } finally {
+        setPhoneBusy(false, "sendPhoneOtpButton");
     }
 }
 
 async function verifyPhoneOTP() {
-    const otp = (document.getElementById("phone-otp")?.value || "").trim();
+    clearAuthError();
+    const otp = (document.getElementById("phone-otp")?.value || "").replace(/\D/g, "").trim();
     if (!phoneConfirmationResult) {
-        showToast("First request an OTP.");
+        showAuthError("Request an OTP first.");
         return;
     }
     if (!/^\d{6}$/.test(otp)) {
-        showToast("Enter the 6-digit OTP.");
+        showAuthError("Enter the 6-digit OTP.");
         return;
     }
+    setPhoneBusy(true, "verifyPhoneOtpButton");
     try {
         await phoneConfirmationResult.confirm(otp);
         phoneConfirmationResult = null;
+        clearInterval(otpTimerId);
+        resetRecaptcha();
+        document.getElementById("phone-otp-section")?.classList.add("hidden");
         showToast("Phone login successful.");
     } catch (error) {
-        console.error(error);
-        showAuthError(mapFirebaseError(error));
-        showToast(mapFirebaseError(error));
+        console.error("Phone verification error:", error);
+        showAuthError(friendlyAuthError(error));
+        showToast(friendlyAuthError(error));
+    } finally {
+        setPhoneBusy(false, "verifyPhoneOtpButton");
     }
 }
+
+async function resendPhoneOTP() {
+    if (otpSeconds > 0) return;
+    await sendPhoneOTP();
+}
+
+document.getElementById("sendPhoneOtpButton")?.addEventListener("click", sendPhoneOTP);
+document.getElementById("verifyPhoneOtpButton")?.addEventListener("click", verifyPhoneOTP);
+document.getElementById("resendPhoneOtpButton")?.addEventListener("click", resendPhoneOTP);
+document.getElementById("phone-number")?.addEventListener("input", (event) => {
+    event.target.value = event.target.value.replace(/[^0-9+]/g, "").replace(/(?!^)\+/g, "");
+    clearAuthError();
+});
+document.getElementById("phone-otp")?.addEventListener("input", (event) => {
+    event.target.value = event.target.value.replace(/\D/g, "").slice(0, 6);
+});
 
 function firebaseConfigured() {
     return window.firebase && FIREBASE_CONFIG.apiKey && !FIREBASE_CONFIG.apiKey.startsWith("YOUR_") && FIREBASE_CONFIG.projectId && !FIREBASE_CONFIG.projectId.startsWith("YOUR_");
@@ -140,6 +224,10 @@ function showApp(user) {
 function showAuth() {
     if (appShell) appShell.hidden = true;
     if (authScreen) authScreen.hidden = false;
+    phoneConfirmationResult = null;
+    clearInterval(otpTimerId);
+    resetRecaptcha();
+    document.getElementById("phone-otp-section")?.classList.add("hidden");
 }
 function initAuth() {
     if (!firebaseConfigured()) {
