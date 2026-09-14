@@ -39,6 +39,10 @@ function setAuthMode(mode) {
     authModeButton.textContent = mode === "login" ? "Create an account" : "Already have an account? Log in";
     forgotPasswordButton.hidden = mode !== "login";
 }
+function mapFirebaseError(error) {
+    return friendlyAuthError(error);
+}
+
 function friendlyAuthError(error) {
     const map = {
         "auth/invalid-email": "Please enter a valid email address.",
@@ -50,7 +54,17 @@ function friendlyAuthError(error) {
         "auth/popup-closed-by-user": "Google sign-in was cancelled.",
         "auth/popup-blocked": "Your browser blocked the Google sign-in popup.",
         "auth/operation-not-allowed": "This sign-in method is not enabled in Firebase yet.",
-        "auth/too-many-requests": "Too many attempts. Please try again later."
+        "auth/too-many-requests": "Too many attempts. Please try again later.",
+        "auth/invalid-phone-number": "Enter a valid mobile number with country code, e.g. +919876543210.",
+        "auth/missing-phone-number": "Enter your mobile number first.",
+        "auth/quota-exceeded": "SMS limit reached. Please try again later.",
+        "auth/captcha-check-failed": "reCAPTCHA verification failed. Please try again.",
+        "auth/app-not-authorized": "This domain is not authorized in Firebase Authentication.",
+        "auth/code-expired": "That OTP has expired. Please request a new OTP.",
+        "auth/invalid-verification-code": "The OTP is incorrect. Please check and try again.",
+        "auth/provider-already-linked": "This sign-in method is already linked to the account.",
+        "auth/account-exists-with-different-credential": "An account already exists with another sign-in method. Sign in with that method first.",
+        "auth/network-request-failed": "Network error. Check your internet connection and try again."
     };
     return map[error?.code] || error?.message || "Authentication failed. Please try again.";
 }
@@ -61,9 +75,9 @@ let phoneConfirmationResult = null;
 function setupRecaptcha() {
     if (!firebaseConfigured() || recaptchaVerifier) return;
     recaptchaVerifier = new firebase.auth.RecaptchaVerifier("recaptcha-container", {
-        size: "invisible",
+        size: "normal",
         callback: () => {}
-    });
+    }, firebaseAuth);
     recaptchaVerifier.render().catch(() => {});
 }
 
@@ -89,6 +103,7 @@ async function sendPhoneOTP() {
             try { recaptchaVerifier.clear(); } catch {}
             recaptchaVerifier = null;
         }
+        showAuthError(mapFirebaseError(error));
         showToast(mapFirebaseError(error));
     }
 }
@@ -109,6 +124,7 @@ async function verifyPhoneOTP() {
         showToast("Phone login successful.");
     } catch (error) {
         console.error(error);
+        showAuthError(mapFirebaseError(error));
         showToast(mapFirebaseError(error));
     }
 }
