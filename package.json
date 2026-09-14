@@ -1,6 +1,6 @@
 {
   "name": "krishti-ai",
-  "version": "15.2.0",
+  "version": "15.0.0",
   "description": "Krishti AI with Firebase auth, secure admin dashboard and user analytics.",
   "main": "server.js",
   "scripts": {
