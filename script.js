@@ -53,7 +53,7 @@ function friendlyAuthError(error) {
         "auth/weak-password": "Password should be at least 6 characters.",
         "auth/popup-closed-by-user": "Google sign-in was cancelled.",
         "auth/popup-blocked": "Your browser blocked the Google sign-in popup.",
-        "auth/operation-not-allowed": "This sign-in method is not enabled in Firebase yet.",
+        "auth/operation-not-allowed": "Firebase rejected this sign-in method. For Phone login, check that Phone is enabled AND India is allowed in Authentication → Settings → SMS region policy.",
         "auth/too-many-requests": "Too many attempts. Please try again later.",
         "auth/invalid-phone-number": "Enter a valid mobile number with country code, e.g. +919876543210.",
         "auth/missing-phone-number": "Enter your mobile number first.",
@@ -69,6 +69,28 @@ function friendlyAuthError(error) {
         "auth/invalid-verification-id": "The OTP session expired. Request a new OTP."
     };
     return map[error?.code] || error?.message || "Authentication failed. Please try again.";
+}
+
+function authDiagnostic(error, context = "Authentication") {
+    const code = error?.code || "unknown";
+    const domain = window.location.hostname || "unknown";
+    const project = FIREBASE_CONFIG.projectId || "unknown";
+    console.error(`[Krishti Auth Diagnostic] ${context}`, {
+        code, message: error?.message || "", domain, project, authDomain: FIREBASE_CONFIG.authDomain
+    });
+    if (context === "Phone OTP" && code === "auth/operation-not-allowed") {
+        return `Phone OTP was rejected by Firebase (code: ${code}). Phone is enabled, so also check Authentication → Settings → SMS region policy and allow India. Domain: ${domain} · Project: ${project}`;
+    }
+    if (context === "Phone OTP" && code === "auth/unauthorized-domain") {
+        return `Firebase rejected this domain (code: ${code}). Current domain: ${domain}. Add it under Authentication → Settings → Authorized domains.`;
+    }
+    if (context === "Phone OTP" && code === "auth/quota-exceeded") {
+        return `Firebase SMS quota is exhausted (code: ${code}). Use a Firebase test phone number while developing or wait for the quota to reset.`;
+    }
+    if (context === "Phone OTP" && code === "auth/captcha-check-failed") {
+        return `reCAPTCHA verification failed (code: ${code}). Reload the page and try again; also confirm the current domain is authorized.`;
+    }
+    return `${friendlyAuthError(error)} [${code}]`;
 }
 
 let recaptchaVerifier = null;
@@ -162,8 +184,8 @@ async function sendPhoneOTP() {
         console.error("Phone OTP error:", error);
         phoneConfirmationResult = null;
         resetRecaptcha();
-        showAuthError(friendlyAuthError(error));
-        showToast(friendlyAuthError(error));
+        showAuthError(authDiagnostic(error, "Phone OTP"));
+        showToast(authDiagnostic(error, "Phone OTP"));
     } finally {
         setPhoneBusy(false, "sendPhoneOtpButton");
     }
@@ -190,8 +212,8 @@ async function verifyPhoneOTP() {
         showToast("Phone login successful.");
     } catch (error) {
         console.error("Phone verification error:", error);
-        showAuthError(friendlyAuthError(error));
-        showToast(friendlyAuthError(error));
+        showAuthError(authDiagnostic(error, "Phone verification"));
+        showToast(authDiagnostic(error, "Phone verification"));
     } finally {
         setPhoneBusy(false, "verifyPhoneOtpButton");
     }
@@ -237,6 +259,7 @@ function initAuth() {
     try {
         if (!firebase.apps.length) firebase.initializeApp(FIREBASE_CONFIG);
         firebaseAuth = firebase.auth();
+        firebaseAuth.languageCode = "en";
         firebaseAuth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);
         firebaseAuth.onAuthStateChanged(user => user ? showApp(user) : showAuth());
     } catch (error) {
