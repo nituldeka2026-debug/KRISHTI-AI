@@ -1422,14 +1422,6 @@ const server =
             return;
         }
 
-        if (
-            req.method === "POST" &&
-            pathname === "/api/image-generate"
-        ) {
-            handleImageGenerate(req,res);
-            return;
-        }
-
 
 
 
