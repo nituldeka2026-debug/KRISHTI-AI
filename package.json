@@ -1,7 +1,7 @@
 {
   "name": "krishti-ai",
   "version": "16.0.0",
-  "description": "Krishti AI with Firebase auth, secure admin dashboard, multimodal AI tools and user analytics.",
+  "description": "Krishti AI \u2014 personal multilingual AI assistant with chat, memory, web research, documents, voice, image generation/editing, Firebase authentication and admin analytics.",
   "main": "server.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
@@ -17,5 +17,8 @@
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
     "firebase-admin": "^13.5.0"
+  },
+  "engines": {
+    "node": "22.x"
   }
 }

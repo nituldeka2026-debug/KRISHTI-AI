@@ -57,7 +57,7 @@ const {
 
 
 /* =========================================================
-   KRISHTI AI V16 — SERVER CONFIG
+   KRISHTI AI V2 — SERVER CONFIG
 ========================================================= */
 
 const PORT =
@@ -1426,7 +1426,7 @@ const server =
             req.method === "POST" &&
             pathname === "/api/image-generate"
         ) {
-            handleImageGenerate(req, res);
+            handleImageGenerate(req,res);
             return;
         }
 
@@ -1560,7 +1560,7 @@ server.listen(
         );
 
         console.log(
-            "KRISHTI AI V16 is ready!"
+            "KRISHTI AI V4 is ready!"
         );
 
         console.log(
