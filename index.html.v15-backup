@@ -10,9 +10,7 @@
     content="#0b0f19"
 >
 
-<title>Krishti AI V16 — Personal AI Studio</title>
-<meta name="description" content="Krishti AI — personal AI studio for chat, images, documents, web research, voice and memory.">
-<meta name="application-version" content="16.0.0">
+<title>Krishti AI</title>
 
 <link rel="stylesheet" href="style.css">
 
@@ -126,7 +124,7 @@
             <div class="topbar-avatar"><img src="assets/krishti-ai-logo.png" alt="Krishti AI"></div>
             <div>
               <h2 id="currentChatTitle">Krishti AI</h2>
-              <span><span class="status-dot"></span> Online · V16</span>
+              <span><span class="status-dot"></span> Online</span>
             </div>
         </div>
         <div class="topbar-actions">
@@ -152,14 +150,7 @@
             Think. Create. Explore.
         </p>
 
-        <div class="v16-feature-grid" aria-label="Krishti AI features">
-          <button type="button" class="v16-feature-card" data-v16-action="chat"><span>💬</span><strong>AI Chat</strong><small>Fast, Smart & Deep modes</small></button>
-          <button type="button" class="v16-feature-card" data-v16-action="image"><span>🎨</span><strong>Image Studio</strong><small>Create, edit, past & future</small></button>
-          <button type="button" class="v16-feature-card" data-v16-action="files"><span>📄</span><strong>Documents</strong><small>PDF, DOC, TXT & more</small></button>
-          <button type="button" class="v16-feature-card" data-v16-action="web"><span>🌐</span><strong>Web Research</strong><small>Current information with search</small></button>
-          <button type="button" class="v16-feature-card" data-v16-action="voice"><span>🎙️</span><strong>Voice</strong><small>Talk to Krishti naturally</small></button>
-          <button type="button" class="v16-feature-card" data-v16-action="memory"><span>🧠</span><strong>Memory</strong><small>Personal preferences & history</small></button>
-        </div>
+
 
     </section>
 

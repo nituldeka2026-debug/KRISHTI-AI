@@ -1554,21 +1554,9 @@ if (historySearch) {
     historySearch.addEventListener("input", () => renderHistory(historySearch.value));
 }
 
-
-// =========================================================
-// V16 FEATURE HUB
-// =========================================================
-document.querySelectorAll('[data-v16-action]').forEach(card => {
-    card.addEventListener('click', () => {
-        const action = card.dataset.v16Action;
-        if (action === 'chat') { userInput?.focus(); return; }
-        if (action === 'image') { if (typeof toggleAttachmentMenu === 'function') toggleAttachmentMenu(); setTimeout(() => document.querySelector('[data-attach="generate"]')?.click(), 50); return; }
-        if (action === 'files') { if (typeof toggleAttachmentMenu === 'function') toggleAttachmentMenu(); setTimeout(() => document.querySelector('[data-attach="files"]')?.click(), 50); return; }
-        if (action === 'web') { if (typeof setWebSearchMode === 'function') setWebSearchMode(true); userInput?.focus(); return; }
-        if (action === 'voice') { voiceButton?.click(); return; }
-        if (action === 'memory') { document.getElementById('settingsButton')?.click(); setTimeout(() => document.querySelector('[data-setting-section="Memory Control"]')?.click(), 100); }
-    });
-});
+if (settingsButton) {
+    settingsButton.addEventListener("click", () => showToast("Settings will be added in the next upgrade."));
+}
 
 // =========================================================
 // RESTORE LAST CHAT ON LOAD
