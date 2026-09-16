@@ -99,6 +99,9 @@ const SETTINGS_FILE = path.join(DATA_DIR, "settings.json");
 const FEEDBACK_FILE = path.join(DATA_DIR, "feedback.json");
 const USERS_FILE = path.join(DATA_DIR, "users.json");
 const ADMIN_EMAIL = String(process.env.KRISHTI_ADMIN_EMAIL || "nitul.deka2026@gmail.com").trim().toLowerCase();
+const REQUIRE_AUTH = String(process.env.KRISHTI_REQUIRE_AUTH || "true").toLowerCase() !== "false";
+const RATE_LIMIT_WINDOW_MS = 60 * 1000;
+const rateBuckets = new Map();
 
 const DEFAULT_SETTINGS = {
     profile: { displayName: "Krishti User", aiNickname: "Krishti" },
@@ -143,14 +146,14 @@ function handleSettings(req, res){
         ensureDataStore();
         if(req.method === "GET") {
             const url = new URL(req.url, `http://${req.headers.host || "localhost"}`);
-            const key = settingsUserKey(req.user?.uid || url.searchParams.get("user"));
+            const key = settingsUserKey(req.authUser?.uid || url.searchParams.get("user"));
             const all = readJsonFile(SETTINGS_FILE, {});
             const settings = mergeSettings(DEFAULT_SETTINGS, all[key] || {});
             return sendJSON(res, 200, { success:true, settings, version:14 });
         }
         return readRequestBody(req).then(body=>{
             let data; try { data=JSON.parse(body); } catch { return sendJSON(res,400,{success:false,error:"Invalid JSON request."}); }
-            const key=settingsUserKey(req.user?.uid || data.user);
+            const key=settingsUserKey(req.authUser?.uid || data.user);
             const all=readJsonFile(SETTINGS_FILE,{});
             all[key]=mergeSettings(DEFAULT_SETTINGS,data.settings || {});
             writeJsonFile(SETTINGS_FILE,all);
@@ -166,7 +169,7 @@ function handleFeedback(req,res){
             if(!message) return sendJSON(res,400,{success:false,error:"Feedback message is required."});
             ensureDataStore();
             const items=readJsonFile(FEEDBACK_FILE,[]);
-            items.push({id:crypto.randomUUID(),user:settingsUserKey(req.user?.uid || data.user),type:String(data.type||"feedback"),message:message.slice(0,5000),createdAt:new Date().toISOString()});
+            items.push({id:crypto.randomUUID(),user:settingsUserKey(req.authUser?.uid || data.user),type:String(data.type||"feedback"),message:message.slice(0,5000),createdAt:new Date().toISOString()});
             writeJsonFile(FEEDBACK_FILE,items.slice(-1000));
             return sendJSON(res,200,{success:true});
         }catch{ return sendJSON(res,400,{success:false,error:"Invalid feedback request."}); }
@@ -182,29 +185,46 @@ async function verifyFirebaseRequest(req){
     return firebaseAdminAuth.verifyIdToken(header.slice(7));
 }
 
-// V16 production security: authenticated API + lightweight per-user rate limiting.
-const RATE_WINDOW_MS = 60 * 1000;
-const RATE_MAX = Number(process.env.KRISHTI_RATE_LIMIT || 40);
-const rateBuckets = new Map();
-async function requireUser(req) {
-    const user = await verifyFirebaseRequest(req);
-    req.user = user;
-    const key = String(user.uid || req.socket.remoteAddress || 'unknown');
-    const now = Date.now();
-    let bucket = rateBuckets.get(key);
-    if (!bucket || now - bucket.start >= RATE_WINDOW_MS) bucket = { start: now, count: 0 };
-    bucket.count += 1;
-    rateBuckets.set(key, bucket);
-    if (bucket.count > RATE_MAX) throw Object.assign(new Error('Too many requests. Please wait a minute and try again.'), { statusCode: 429 });
-    // Prevent unbounded memory growth.
-    if (rateBuckets.size > 5000) { for (const [k,v] of rateBuckets) if (now-v.start > RATE_WINDOW_MS) rateBuckets.delete(k); }
-    return user;
+function setSecurityHeaders(res){
+    if (res.headersSent) return;
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.setHeader("X-Frame-Options", "DENY");
+    res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+    res.setHeader("Permissions-Policy", "camera=(), microphone=(self), geolocation=()");
+    res.setHeader("Cross-Origin-Opener-Policy", "same-origin-allow-popups");
 }
-function secureApi(handler) {
-    return async (req,res) => {
-        try { await requireUser(req); await handler(req,res); }
-        catch (error) { console.error('Secure API error:', error.message); sendJSON(res, error.statusCode || 500, { success:false, error:error.message || 'Request failed.' }); }
-    };
+
+function rateLimitKey(req, user){
+    return String(user?.uid || req.socket?.remoteAddress || "unknown");
+}
+function checkRateLimit(req, user, limit=30){
+    const now=Date.now();
+    const key=rateLimitKey(req,user);
+    let bucket=rateBuckets.get(key);
+    if(!bucket || now-bucket.start >= RATE_LIMIT_WINDOW_MS){ bucket={start:now,count:0}; rateBuckets.set(key,bucket); }
+    bucket.count += 1;
+    if(bucket.count > limit) return Math.max(1, Math.ceil((RATE_LIMIT_WINDOW_MS-(now-bucket.start))/1000));
+    if(rateBuckets.size > 5000){ for(const [k,v] of rateBuckets){ if(now-v.start > RATE_LIMIT_WINDOW_MS) rateBuckets.delete(k); } }
+    return 0;
+}
+
+async function secureApi(req,res,handler,limit=30){
+    try{
+        let user=null;
+        if(REQUIRE_AUTH){
+            user=await verifyFirebaseRequest(req);
+            req.authUser=user;
+        }
+        const retry=checkRateLimit(req,user,limit);
+        if(retry) {
+            res.setHeader("Retry-After", String(retry));
+            return sendJSON(res,429,{success:false,error:"Too many requests. Please try again shortly."});
+        }
+        return await handler(req,res);
+    }catch(error){
+        const code=error.statusCode || 401;
+        return sendJSON(res,code,{success:false,error: error.message || "Authentication required."});
+    }
 }
 
 async function requireAdmin(req){
@@ -959,6 +979,7 @@ async function handleChat(
         ========================================= */
 
         let memories = [];
+        const clientMemories = Array.isArray(data.memory) ? data.memory.filter(x => typeof x === "string").slice(-10) : [];
 
 
         try {
@@ -977,10 +998,10 @@ async function handleChat(
         }
 
 
-        const conversation =
-            buildConversation(
-                memories
-            );
+        let conversation = buildConversation(memories);
+        if (clientMemories.length) {
+            conversation += "\nSaved user memory (cloud-synced):\n" + clientMemories.map(x => "- " + x.slice(0, 500)).join("\n") + "\n";
+        }
 
 
         /* =========================================
@@ -1229,7 +1250,7 @@ function handleHealth(
         {
             success: true,
             app: "Krishti AI",
-            version: "4.0",
+            version: "17.0",
             ai: "Gemini",
             model: GEMINI_MODEL,
             memory: "enabled",
@@ -1388,6 +1409,7 @@ const server =
     http.createServer(
         (req, res) => {
 
+            setSecurityHeaders(res);
             const pathname =
                 req.url.split("?")[0];
 
@@ -1415,7 +1437,7 @@ const server =
                 pathname === "/api/search"
             ) {
 
-                secureApi(handleSearch)(req, res);
+                secureApi(req,res,handleSearch,20);
 
                 return;
             }
@@ -1429,7 +1451,7 @@ const server =
                 pathname === "/api/chat"
             ) {
 
-                secureApi(handleChat)(req, res);
+                secureApi(req,res,handleChat,30);
 
                 return;
             }
@@ -1438,12 +1460,7 @@ const server =
             req.method === "POST" &&
             pathname === "/api/image-edit"
         ) {
-            secureApi(handleImageEdit)(req,res);
-            return;
-        }
-
-        if (req.method === "POST" && pathname === "/api/image-generate") {
-            secureApi(handleImageGenerate)(req,res);
+            secureApi(req,res,handleImageEdit,10);
             return;
         }
 
@@ -1451,22 +1468,22 @@ const server =
 
 
             if (req.method === "POST" && pathname === "/api/activity") {
-                secureApi(handleActivity)(req,res);
+                secureApi(req,res,handleActivity,60);
                 return;
             }
 
             if (req.method === "GET" && pathname === "/api/admin/stats") {
-                handleAdminStats(req,res);
+                secureApi(req,res,async (r,rr)=>handleAdminStats(r,rr),30);
                 return;
             }
 
             if ((req.method === "GET" || req.method === "PUT") && pathname === "/api/settings") {
-                secureApi(handleSettings)(req, res);
+                secureApi(req,res,handleSettings,60);
                 return;
             }
 
             if (req.method === "POST" && pathname === "/api/feedback") {
-                secureApi(handleFeedback)(req, res);
+                secureApi(req,res,handleFeedback,20);
                 return;
             }
 
