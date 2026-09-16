@@ -1970,35 +1970,3 @@ html,body{background:var(--k-bg);color:var(--k-text)}
   .attach,.voice{width:37px;height:40px}
   .send{width:39px;min-width:39px;height:39px;min-height:39px}
 }
-
-
-/* =========================================================
-   KRISHTI AI — PROFESSIONAL UI REFRESH
-   Keeps existing functionality; visual layer only.
-   ========================================================= */
-:root{
-  --k-bg:#080b12;--k-panel:#0e131d;--k-panel2:#121824;--k-border:rgba(255,255,255,.09);
-  --k-text:#f5f7fb;--k-muted:#9aa5b5;--k-accent:#8b7cff;--k-accent2:#6d5dfc;
-  --k-radius:16px;--k-shadow:0 18px 55px rgba(0,0,0,.28)
-}
-body{background:radial-gradient(circle at 50% -20%,rgba(111,93,252,.10),transparent 34%),var(--k-bg);color:var(--k-text)}
-button,input,textarea{font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
-.sidebar{background:rgba(10,14,22,.92)!important;border-right:1px solid var(--k-border)!important;backdrop-filter:blur(18px)}
-.sidebar-brand{padding:18px 16px!important}.sidebar-brand-name{gap:11px!important}.sidebar-brand-name img{width:36px!important;height:36px!important;border-radius:11px!important}.sidebar-brand-name span{gap:1px!important}.sidebar-brand-name b{font-size:16px!important;letter-spacing:-.2px}.sidebar-brand-name small{color:var(--k-muted)!important;font-size:10px!important}
-.sidebar-tool,.topbar-icon{border:1px solid transparent!important;border-radius:10px!important;color:#aab4c4!important}.sidebar-tool:hover,.topbar-icon:hover{background:rgba(255,255,255,.06)!important;border-color:var(--k-border)!important}
-.sidebar-nav{padding:8px 10px!important}.sidebar-nav-item{border-radius:11px!important;color:#b7c0ce!important;margin:2px 0!important;min-height:40px!important}.sidebar-nav-item:hover{background:rgba(255,255,255,.055)!important;color:#fff!important}.sidebar-nav-item.active{background:rgba(139,124,255,.13)!important;color:#fff!important}
-.nav-icon{opacity:.8!important}.nav-badge{font-size:8px!important;letter-spacing:.5px!important;border-radius:999px!important}
-.sidebar-bottom{padding:10px!important;border-top:1px solid var(--k-border)!important}.settings-button{border-radius:11px!important;background:rgba(255,255,255,.035)!important;color:#c6ceda!important}
-.main{background:transparent!important}.topbar{height:62px!important;border-bottom:1px solid var(--k-border)!important;background:rgba(8,11,18,.72)!important;backdrop-filter:blur(16px)}
-.chat-area{max-width:900px!important;margin:0 auto!important;width:100%!important}.messages{padding:28px 22px 170px!important}
-.message{max-width:850px!important}.message.user{margin-left:auto!important}.message.user .message-content{background:linear-gradient(135deg,#272d3b,#202633)!important;border:1px solid rgba(255,255,255,.07)!important;border-radius:18px 18px 5px 18px!important;box-shadow:0 8px 25px rgba(0,0,0,.16)!important}.message.assistant .message-content{background:transparent!important;border:0!important;padding-left:0!important}
-.composer-wrap,.input-area,.composer{background:transparent!important}.composer-form,.input-box{background:rgba(17,22,32,.94)!important;border:1px solid rgba(255,255,255,.12)!important;border-radius:22px!important;box-shadow:0 15px 45px rgba(0,0,0,.35)!important;backdrop-filter:blur(18px)}
-textarea#userInput{color:#f5f7fb!important;font-size:15px!important;line-height:1.55!important}.userInput::placeholder,#userInput::placeholder{color:#737f91!important}
-.voice,.send,.attach,.tool-button{border-radius:12px!important}.send{background:linear-gradient(135deg,var(--k-accent),var(--k-accent2))!important;color:white!important;box-shadow:0 7px 20px rgba(109,93,252,.28)!important}.send:hover{transform:translateY(-1px);filter:brightness(1.08)}
-.welcome,.welcome-card{background:transparent!important}.welcome h1{letter-spacing:-1.2px!important}.welcome p{color:var(--k-muted)!important}.prompt-card,.suggestion,.quick-action{background:rgba(255,255,255,.035)!important;border:1px solid var(--k-border)!important;border-radius:15px!important;transition:.18s ease}.prompt-card:hover,.suggestion:hover,.quick-action:hover{background:rgba(139,124,255,.08)!important;border-color:rgba(139,124,255,.28)!important;transform:translateY(-1px)}
-.auth-screen{background:radial-gradient(circle at 50% 10%,rgba(139,124,255,.14),transparent 35%),#080b12!important}.auth-card{background:rgba(14,19,29,.88)!important;border:1px solid var(--k-border)!important;border-radius:24px!important;box-shadow:var(--k-shadow)!important;backdrop-filter:blur(22px)!important}.auth-logo img{border-radius:18px!important}.auth-card input{background:rgba(255,255,255,.045)!important;border-color:var(--k-border)!important;border-radius:12px!important}.auth-card button{border-radius:12px!important}
-.settings-view{background:var(--k-bg)!important}.settings-shell{background:transparent!important}.settings-nav{background:rgba(10,14,22,.94)!important;border-right:1px solid var(--k-border)!important}.settings-nav-item{border-radius:10px!important}.settings-nav-item.active{background:rgba(139,124,255,.12)!important;color:#fff!important}.settings-content{background:transparent!important}
-.modal,.dialog,.popup,.dropdown-menu{background:#111722!important;border:1px solid var(--k-border)!important;border-radius:16px!important;box-shadow:var(--k-shadow)!important}
-::-webkit-scrollbar{width:7px;height:7px}::-webkit-scrollbar-thumb{background:rgba(255,255,255,.13);border-radius:99px}::-webkit-scrollbar-track{background:transparent}
-@media(max-width:800px){.sidebar{box-shadow:20px 0 60px rgba(0,0,0,.45)}.messages{padding:20px 14px 145px!important}.chat-area{width:100%!important}.topbar{height:56px!important}.composer-form,.input-box{border-radius:18px!important}.auth-card{width:min(92vw,430px)!important;padding:24px!important}}
-@media(min-width:801px){.messages{padding-left:30px!important;padding-right:30px!important}.composer-wrap{padding-left:22px!important;padding-right:22px!important}}
