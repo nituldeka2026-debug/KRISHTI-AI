@@ -306,7 +306,7 @@ function addAccountControls() {
     document.getElementById("logoutButton")?.addEventListener("click", async () => { if (firebaseAuth) await firebaseAuth.signOut(); });
 }
 const _showApp = showApp;
-showApp = function(user) {
+showApp = async function(user) {
     _showApp(user);
     addAccountControls();
     window.loadKrishtiSettings?.();
@@ -318,6 +318,8 @@ showApp = function(user) {
         currentMessages = latest && Array.isArray(latest.messages) ? latest.messages.slice() : [];
         if (typeof renderHistory === "function") renderHistory();
         if (typeof updateCurrentTitle === "function") updateCurrentTitle();
+        await loadCloudHistory();
+        await loadCloudMemory();
     }
 };
 
@@ -458,6 +460,12 @@ const fileAttachmentMeta = document.getElementById("fileAttachmentMeta");
 const removeFileAttachmentButton = document.getElementById("removeFileAttachment");
 
 
+async function krishtiAuthHeaders(extra = {}) {
+    const headers = { ...extra };
+    try { if (firebaseAuth?.currentUser) headers.Authorization = 'Bearer ' + await firebaseAuth.currentUser.getIdToken(); } catch (_) {}
+    return headers;
+}
+
 // =========================================================
 // STATE
 // =========================================================
@@ -495,24 +503,50 @@ function loadHistory() {
         chats = raw ? JSON.parse(raw) : [];
         if (!Array.isArray(chats)) chats = [];
     } catch (error) {
-        console.error("History load error:", error);
-        chats = [];
+        console.error("History load error:", error); chats = [];
     }
+}
+async function loadCloudHistory() {
+    try {
+        if (!window.KrishtiCloud?.ready()) return;
+        const remote = await window.KrishtiCloud.listChats();
+        if (Array.isArray(remote)) {
+            const byId = new Map(chats.map(c => [c.id, c]));
+            remote.forEach(c => byId.set(c.id, c));
+            chats = Array.from(byId.values()).sort((a,b)=>(b.updatedAt||0)-(a.updatedAt||0)).slice(0,100);
+            saveHistory(); renderHistory();
+        }
+    } catch (e) { console.warn('Cloud chat history unavailable:', e.message); }
 }
 
 function getMemoryKey(){ return MEMORY_KEY + (window.KRISHTI_USER?.uid || "guest"); }
 function getLocalMemory(){ try{return JSON.parse(localStorage.getItem(getMemoryKey())||"[]");}catch{return [];} }
 function saveLocalMemory(items){ try{localStorage.setItem(getMemoryKey(),JSON.stringify(items.slice(-50)));}catch{}}
+async function loadCloudMemory(){ try { const remote=await window.KrishtiCloud?.listMemory(); if(Array.isArray(remote)){ saveLocalMemory(remote.slice(0,50).reverse()); } } catch(e){ console.warn('Cloud memory unavailable:',e.message); } }
 function rememberFromText(text){
     const t=String(text||"").trim();
     const m=t.match(/^(?:remember|please remember|note that)\s*[:,-]?\s*(.+)$/i);
     if(!m) return false;
-    const items=getLocalMemory(); items.push({text:m[1].trim().slice(0,300),time:Date.now()}); saveLocalMemory(items);
+    const item={id:crypto.randomUUID(),text:m[1].trim().slice(0,300),time:Date.now()};
+    const items=getLocalMemory(); items.push(item); saveLocalMemory(items);
+    window.KrishtiCloud?.saveMemory(item).catch?.(e=>console.warn('Cloud memory save failed:',e.message));
+    scheduleCloudBackup();
     addMessage("🧠 Moi eta kotha memory-t save korilu.","ai"); return true;
 }
 function getLibraryKey(){return LIBRARY_KEY+(window.KRISHTI_USER?.uid||"guest");}
 function getLibrary(){try{return JSON.parse(localStorage.getItem(getLibraryKey())||"[]");}catch{return []}}
 function saveLibrary(items){try{localStorage.setItem(getLibraryKey(),JSON.stringify(items.slice(-100)));}catch{}}
+let cloudBackupTimer=null;
+function scheduleCloudBackup(){
+    clearTimeout(cloudBackupTimer);
+    cloudBackupTimer=setTimeout(async()=>{
+        try {
+            if(!window.KrishtiCloud?.ready()) return;
+            const ok=await window.KrishtiCloud.createBackup({version:16,exportedAt:new Date().toISOString(),chats:chats.slice(-50),memory:getLocalMemory().slice(-50),library:getLibrary().slice(-50),mode:activeKrishtiMode});
+            if(ok) console.debug('Krishti automatic cloud backup saved.');
+        } catch(e){ console.debug('Automatic cloud backup skipped:',e.message); }
+    },1500);
+}
 function addLibraryItem(type,title,meta=""){const a=getLibrary();a.unshift({id:Date.now()+Math.random(),type,title,meta,time:Date.now()});saveLibrary(a);renderLibrary();}
 function renderLibrary(){const el=document.getElementById("libraryList");if(!el)return;const a=getLibrary();el.innerHTML=a.length?a.map(i=>`<div class="library-item"><span>${i.type==="image"?"🖼️":i.type==="chat"?"💬":"📌"}</span><div><strong>${escapeHtml(i.title)}</strong><small>${escapeHtml(i.meta||new Date(i.time).toLocaleString())}</small></div></div>`).join(""):"<div class='history-empty'>Library empty. Export a backup or create content to see items here.</div>";}
 function escapeHtml(v){const d=document.createElement("div");d.textContent=String(v??"");return d.innerHTML;}
@@ -543,6 +577,7 @@ function createChat() {
     saveHistory();
     renderHistory();
     updateCurrentTitle();
+    window.KrishtiCloud?.saveChat(chat).catch?.(e => console.warn('Cloud chat create failed:', e.message));
     return chat;
 }
 
@@ -572,6 +607,8 @@ function persistMessages() {
     saveHistory();
     renderHistory();
     updateCurrentTitle();
+    window.KrishtiCloud?.saveChat(chat).catch?.(e => console.warn('Cloud chat save failed:', e.message));
+    scheduleCloudBackup();
 }
 
 function updateCurrentTitle() {
@@ -671,6 +708,7 @@ function renameChat(id = currentChatId) {
     saveHistory();
     renderHistory(historySearch?.value || "");
     updateCurrentTitle();
+    window.KrishtiCloud?.saveChat(chat).catch?.(e => console.warn('Cloud rename failed:', e.message));
 }
 
 function deleteChat(id) {
@@ -685,6 +723,7 @@ function deleteChat(id) {
     }
     saveHistory();
     renderHistory(historySearch?.value || "");
+    window.KrishtiCloud?.deleteChat(id).catch?.(e => console.warn('Cloud delete failed:', e.message));
 }
 
 function startFreshChat(createHistoryEntry = true) {
@@ -1012,7 +1051,7 @@ async function sendMessage(customMessage = null) {
         bumpPersonalUsage("chat"); recordActivity("chat");
         const response = await fetch("/api/chat", {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: await krishtiAuthHeaders({ "Content-Type": "application/json" }),
             body: JSON.stringify({
                 message: message,
                 document: selectedFile
@@ -1844,9 +1883,22 @@ function openLibrary(){renderLibrary();if(libraryView)libraryView.hidden=false;}
 document.getElementById("libraryButton")?.addEventListener("click",openLibrary);
 document.getElementById("libraryClose")?.addEventListener("click",()=>{if(libraryView)libraryView.hidden=true;});
 function downloadJson(filename,obj){const blob=new Blob([JSON.stringify(obj,null,2)],{type:"application/json"});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=filename;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);}
-document.getElementById("exportKrishti")?.addEventListener("click",()=>downloadJson("krishti-ai-backup.json",{version:13,exportedAt:new Date().toISOString(),chats,memory:getLocalMemory(),library:getLibrary(),mode:activeKrishtiMode}));
+document.getElementById("exportKrishti")?.addEventListener("click",()=>downloadJson("krishti-ai-backup.json",{version:16,exportedAt:new Date().toISOString(),chats,memory:getLocalMemory(),library:getLibrary(),mode:activeKrishtiMode}));
 document.getElementById("importKrishti")?.addEventListener("click",()=>document.getElementById("importKrishtiInput")?.click());
-document.getElementById("importKrishtiInput")?.addEventListener("change",async e=>{const f=e.target.files?.[0];if(!f)return;try{const data=JSON.parse(await f.text());if(Array.isArray(data.chats)){chats=data.chats;saveHistory();renderHistory();}if(Array.isArray(data.memory))saveLocalMemory(data.memory);if(Array.isArray(data.library))saveLibrary(data.library);if(data.mode)setKrishtiMode(data.mode);showToast("Krishti backup imported");}catch{showToast("Invalid Krishti backup file");}e.target.value="";});
+document.getElementById("restoreCloudKrishti")?.addEventListener("click",async()=>{
+    try {
+        const data=await window.KrishtiCloud?.getBackup();
+        if(!data) return showToast('No cloud backup found yet');
+        if(!confirm('Restore the latest cloud backup on this device? Current local data will be replaced.')) return;
+        if(Array.isArray(data.chats)){chats=data.chats;saveHistory();renderHistory();}
+        if(Array.isArray(data.memory))saveLocalMemory(data.memory);
+        if(Array.isArray(data.library))saveLibrary(data.library);
+        if(data.mode)setKrishtiMode(data.mode);
+        const latest=chats[0]; if(latest) openChat(latest.id); else startFreshChat(false);
+        showToast('Cloud backup restored');
+    } catch(e){ console.error(e); showToast('Cloud restore failed'); }
+});
+document.getElementById("importKrishtiInput")?.addEventListener("change",async e=>{const f=e.target.files?.[0];if(!f)return;try{const data=JSON.parse(await f.text());if(Array.isArray(data.chats)){chats=data.chats;saveHistory();renderHistory();}if(Array.isArray(data.memory))saveLocalMemory(data.memory);if(Array.isArray(data.library))saveLibrary(data.library);if(data.mode)setKrishtiMode(data.mode); scheduleCloudBackup(); showToast("Krishti backup imported");}catch{showToast("Invalid Krishti backup file");}e.target.value="";});
 
 // Pin/archive controls are stored with each chat.
 const oldRenderHistory=renderHistory;
@@ -1936,12 +1988,12 @@ window.verifyPhoneOTP = verifyPhoneOTP;
         try{
             const key=encodeURIComponent(currentUserKey());
             if(method==='GET'){
-                const r=await fetch('/api/settings?user='+key,{cache:'no-store'});
+                const r=await fetch('/api/settings?user='+key,{cache:'no-store',headers:await krishtiAuthHeaders()});
                 if(!r.ok) throw new Error('settings get failed');
                 const data=await r.json();
                 settings=deepMerge(cloneDefaults(),data.settings||{}); persistLocal(); return settings;
             }
-            const r=await fetch('/api/settings',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({user:currentUserKey(),settings})});
+            const r=await fetch('/api/settings',{method:'PUT',headers:await krishtiAuthHeaders({'Content-Type':'application/json'}),body:JSON.stringify({user:currentUserKey(),settings})});
             if(!r.ok) throw new Error('settings save failed');
             return await r.json();
         }catch(e){ console.warn('Krishti settings sync:',e.message); return null; }
@@ -2039,15 +2091,15 @@ window.verifyPhoneOTP = verifyPhoneOTP;
             if(a==='library'){ closeSettings(); document.getElementById('libraryView')?.removeAttribute('hidden'); if(typeof renderLibrary==='function')renderLibrary(); return; }
             if(a==='export'){ document.getElementById('exportKrishti')?.click(); return; }
             if(a==='import'){ document.getElementById('importKrishti')?.click(); return; }
-            if(a==='clear-history'){ if(!confirm('Clear all saved chats on this device?'))return; chats=[];currentChatId=null;currentMessages=[];saveHistory();renderHistory();startFreshChat(false);showToast('Chat history cleared'); return; }
-            if(a==='clear-memory'){ if(!confirm('Clear local Krishti memory?'))return; localStorage.removeItem(typeof MEMORY_KEY!=='undefined'?MEMORY_KEY:'krishti_ai_memory_v1_');showToast('Local memory cleared');selectSection('Memory Control');return; }
+            if(a==='clear-history'){ if(!confirm('Clear all saved chats on this device?'))return; if(!confirm('This will clear cloud history for this account too. Continue?')) return; const oldChats=chats.slice(); chats=[];currentChatId=null;currentMessages=[];saveHistory();renderHistory();startFreshChat(false); Promise.all(oldChats.map(c=>window.KrishtiCloud?.deleteChat(c.id))).catch(()=>{}); showToast('Cloud + local chat history cleared'); return; }
+            if(a==='clear-memory'){ if(!confirm('Clear local Krishti memory?'))return; localStorage.removeItem(typeof MEMORY_KEY!=='undefined'?MEMORY_KEY:'krishti_ai_memory_v1_'); window.KrishtiCloud?.clearMemory().catch?.(e=>console.warn(e)); showToast('Cloud + local memory cleared');selectSection('Memory Control');return; }
             if(a==='help-chat') return showToast('Type your question, then Send. Use + for tools.');
             if(a==='help-mobile') return showToast('Use the top-left menu icon to open the Krishti drawer.');
         }));
         const report=document.getElementById('sendBugReport');
         report?.addEventListener('click',async()=>{
             const message=document.getElementById('bugReport')?.value.trim(); if(!message)return showToast('Write the problem first.');
-            try{const r=await fetch('/api/feedback',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user:currentUserKey(),message,type:'bug'})});if(!r.ok)throw new Error();document.getElementById('bugReport').value='';showToast('Bug report sent');}catch{showToast('Could not send report');}
+            try{const r=await fetch('/api/feedback',{method:'POST',headers:await krishtiAuthHeaders({'Content-Type':'application/json'}),body:JSON.stringify({user:currentUserKey(),message,type:'bug'})});if(!r.ok)throw new Error();document.getElementById('bugReport').value='';showToast('Bug report sent');}catch{showToast('Could not send report');}
         });
         if(section==='Krishti Profile') document.getElementById('displayName')?.addEventListener('change',()=>{const n=document.getElementById('displayName').value.trim();document.querySelectorAll('.profile-info strong').forEach(x=>{if(n)x.textContent=n;});});
     }

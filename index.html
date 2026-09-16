@@ -287,7 +287,7 @@
   </div>
 </section>
 
-<section id="libraryView" class="utility-view" hidden aria-label="Krishti Library"><div class="utility-card"><div class="utility-head"><div><h2>📁 Krishti Library</h2><p>Your saved chat backups, notes and generated items on this device.</p></div><button id="libraryClose" type="button">×</button></div><div class="library-actions"><button id="exportKrishti">Export backup</button><button id="importKrishti">Import backup</button><input id="importKrishtiInput" type="file" accept="application/json" hidden></div><div id="libraryList" class="library-list"></div></div></section>
+<section id="libraryView" class="utility-view" hidden aria-label="Krishti Library"><div class="utility-card"><div class="utility-head"><div><h2>📁 Krishti Library</h2><p>Your saved chat backups, notes and generated items on this device.</p></div><button id="libraryClose" type="button">×</button></div><div class="library-actions"><button id="exportKrishti">Export backup</button><button id="importKrishti">Import backup</button><button id="restoreCloudKrishti">Restore cloud backup</button><input id="importKrishtiInput" type="file" accept="application/json" hidden></div><div id="libraryList" class="library-list"></div></div></section>
 
 <div id="profileMenu" class="profile-menu" hidden>
   <div class="profile-menu-title">Krishti AI</div>
@@ -303,6 +303,8 @@
 </div>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+<script src="cloud-sync.js"></script>
 <link rel="manifest" href="manifest.webmanifest">
 <script src="script.js"></script>
 </body>

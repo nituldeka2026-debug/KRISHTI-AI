@@ -143,14 +143,14 @@ function handleSettings(req, res){
         ensureDataStore();
         if(req.method === "GET") {
             const url = new URL(req.url, `http://${req.headers.host || "localhost"}`);
-            const key = settingsUserKey(url.searchParams.get("user"));
+            const key = settingsUserKey(req.user?.uid || url.searchParams.get("user"));
             const all = readJsonFile(SETTINGS_FILE, {});
             const settings = mergeSettings(DEFAULT_SETTINGS, all[key] || {});
             return sendJSON(res, 200, { success:true, settings, version:14 });
         }
         return readRequestBody(req).then(body=>{
             let data; try { data=JSON.parse(body); } catch { return sendJSON(res,400,{success:false,error:"Invalid JSON request."}); }
-            const key=settingsUserKey(data.user);
+            const key=settingsUserKey(req.user?.uid || data.user);
             const all=readJsonFile(SETTINGS_FILE,{});
             all[key]=mergeSettings(DEFAULT_SETTINGS,data.settings || {});
             writeJsonFile(SETTINGS_FILE,all);
@@ -166,7 +166,7 @@ function handleFeedback(req,res){
             if(!message) return sendJSON(res,400,{success:false,error:"Feedback message is required."});
             ensureDataStore();
             const items=readJsonFile(FEEDBACK_FILE,[]);
-            items.push({id:crypto.randomUUID(),user:settingsUserKey(data.user),type:String(data.type||"feedback"),message:message.slice(0,5000),createdAt:new Date().toISOString()});
+            items.push({id:crypto.randomUUID(),user:settingsUserKey(req.user?.uid || data.user),type:String(data.type||"feedback"),message:message.slice(0,5000),createdAt:new Date().toISOString()});
             writeJsonFile(FEEDBACK_FILE,items.slice(-1000));
             return sendJSON(res,200,{success:true});
         }catch{ return sendJSON(res,400,{success:false,error:"Invalid feedback request."}); }
@@ -181,6 +181,32 @@ async function verifyFirebaseRequest(req){
     if(!header.startsWith("Bearer ")) throw Object.assign(new Error("Missing Firebase ID token."), { statusCode: 401 });
     return firebaseAdminAuth.verifyIdToken(header.slice(7));
 }
+
+// V16 production security: authenticated API + lightweight per-user rate limiting.
+const RATE_WINDOW_MS = 60 * 1000;
+const RATE_MAX = Number(process.env.KRISHTI_RATE_LIMIT || 40);
+const rateBuckets = new Map();
+async function requireUser(req) {
+    const user = await verifyFirebaseRequest(req);
+    req.user = user;
+    const key = String(user.uid || req.socket.remoteAddress || 'unknown');
+    const now = Date.now();
+    let bucket = rateBuckets.get(key);
+    if (!bucket || now - bucket.start >= RATE_WINDOW_MS) bucket = { start: now, count: 0 };
+    bucket.count += 1;
+    rateBuckets.set(key, bucket);
+    if (bucket.count > RATE_MAX) throw Object.assign(new Error('Too many requests. Please wait a minute and try again.'), { statusCode: 429 });
+    // Prevent unbounded memory growth.
+    if (rateBuckets.size > 5000) { for (const [k,v] of rateBuckets) if (now-v.start > RATE_WINDOW_MS) rateBuckets.delete(k); }
+    return user;
+}
+function secureApi(handler) {
+    return async (req,res) => {
+        try { await requireUser(req); await handler(req,res); }
+        catch (error) { console.error('Secure API error:', error.message); sendJSON(res, error.statusCode || 500, { success:false, error:error.message || 'Request failed.' }); }
+    };
+}
+
 async function requireAdmin(req){
     const decoded=await verifyFirebaseRequest(req);
     if(String(decoded.email || "").toLowerCase() !== ADMIN_EMAIL){
@@ -1389,10 +1415,7 @@ const server =
                 pathname === "/api/search"
             ) {
 
-                handleSearch(
-                    req,
-                    res
-                );
+                secureApi(handleSearch)(req, res);
 
                 return;
             }
@@ -1406,10 +1429,7 @@ const server =
                 pathname === "/api/chat"
             ) {
 
-                handleChat(
-                    req,
-                    res
-                );
+                secureApi(handleChat)(req, res);
 
                 return;
             }
@@ -1418,7 +1438,12 @@ const server =
             req.method === "POST" &&
             pathname === "/api/image-edit"
         ) {
-            handleImageEdit(req,res);
+            secureApi(handleImageEdit)(req,res);
+            return;
+        }
+
+        if (req.method === "POST" && pathname === "/api/image-generate") {
+            secureApi(handleImageGenerate)(req,res);
             return;
         }
 
@@ -1426,7 +1451,7 @@ const server =
 
 
             if (req.method === "POST" && pathname === "/api/activity") {
-                handleActivity(req,res);
+                secureApi(handleActivity)(req,res);
                 return;
             }
 
@@ -1436,12 +1461,12 @@ const server =
             }
 
             if ((req.method === "GET" || req.method === "PUT") && pathname === "/api/settings") {
-                handleSettings(req, res);
+                secureApi(handleSettings)(req, res);
                 return;
             }
 
             if (req.method === "POST" && pathname === "/api/feedback") {
-                handleFeedback(req, res);
+                secureApi(handleFeedback)(req, res);
                 return;
             }
 
