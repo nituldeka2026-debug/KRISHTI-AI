@@ -334,6 +334,17 @@ showApp = function(user) {
 // KRISHTI V15 — USER + ADMIN DASHBOARD
 // =========================================================
 const KRISHTI_ADMIN_EMAIL = "nitul.deka2026@gmail.com";
+
+// V17.1 — authenticated API helper. All protected API calls must include the
+// Firebase ID token issued to the currently signed-in user.
+async function krishtiAuthHeaders(extra = {}) {
+    if (!firebaseAuth?.currentUser) {
+        throw new Error("Please sign in to use KRISHTI AI.");
+    }
+    const token = await firebaseAuth.currentUser.getIdToken();
+    return { ...extra, Authorization: "Bearer " + token };
+}
+
 function isKrishtiAdmin(user = window.KRISHTI_USER) {
     return String(user?.email || "").trim().toLowerCase() === KRISHTI_ADMIN_EMAIL;
 }
@@ -886,7 +897,7 @@ async function sendMessage(customMessage = null) {
         try {
             bumpPersonalUsage("image"); recordActivity("image");
             const response = await fetch("/api/image-generate", {
-                method: "POST", headers: {"Content-Type":"application/json"},
+                method: "POST", headers: await krishtiAuthHeaders({"Content-Type":"application/json"}),
                 body: JSON.stringify({prompt, era: mode})
             });
             if (typing) typing.remove();
@@ -926,7 +937,7 @@ async function sendMessage(customMessage = null) {
             bumpPersonalUsage("image"); recordActivity("image");
             const response = await fetch("/api/image-edit", {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
+                headers: await krishtiAuthHeaders({ "Content-Type": "application/json" }),
                 body: JSON.stringify({
                     prompt,
                     image: payload.data,
@@ -974,7 +985,7 @@ async function sendMessage(customMessage = null) {
             bumpPersonalUsage("search"); recordActivity("search");
             const response = await fetch("/api/search", {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
+                headers: await krishtiAuthHeaders({ "Content-Type": "application/json" }),
                 body: JSON.stringify({ message })
             });
             if (typing) typing.remove();
@@ -1022,7 +1033,7 @@ async function sendMessage(customMessage = null) {
         bumpPersonalUsage("chat"); recordActivity("chat");
         const response = await fetch("/api/chat", {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: await krishtiAuthHeaders({ "Content-Type": "application/json" }),
             body: JSON.stringify({
                 message: enrichedMessage,
                 memory: ks.brain?.memoryEnabled === false ? [] : getLocalMemory().slice(-10).map(x=>x.text),
