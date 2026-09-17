@@ -1492,6 +1492,17 @@ const server =
             return;
         }
 
+        /* =====================================
+           TEXT -> IMAGE GENERATION API
+        ===================================== */
+        if (
+            req.method === "POST" &&
+            pathname === "/api/image-generate"
+        ) {
+            secureApi(req,res,handleImageGenerate,10);
+            return;
+        }
+
 
 
 
@@ -1630,29 +1641,3 @@ server.listen(
         );
     }
 );
-
-
-// Image generation route: connects the existing frontend /api/image-generate
-// to the existing handleImageGenerate() implementation.
-app.post('/api/image-generate', async (req, res) => {
-  try {
-    if (typeof handleImageGenerate !== 'function') {
-      return res.status(500).json({
-        success: false,
-        error: 'Image generation handler is not available on the server.'
-      });
-    }
-
-    const result = await handleImageGenerate(req, res);
-    return result;
-  } catch (error) {
-    console.error('Image generation error:', error);
-    if (!res.headersSent) {
-      return res.status(500).json({
-        success: false,
-        error: error?.message || 'Image generation failed.'
-      });
-    }
-  }
-});
-
