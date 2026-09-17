@@ -1028,35 +1028,63 @@ async function handleChat(
 
         let stream;
 
+        // Gemini can temporarily return 503 when a model is under high demand.
+        // Retry the same request a few times before returning an error to the user.
+        const geminiContents = hasDocument
+            ? [
+                {
+                    role: "user",
+                    parts: [
+                        { text: prompt },
+                        {
+                            inlineData: {
+                                mimeType: document.mimeType,
+                                data: document.data
+                            }
+                        }
+                    ]
+                }
+            ]
+            : prompt;
 
-        try {
+        const MAX_GEMINI_RETRIES = 3;
+        let lastGeminiError = null;
 
-            stream =
-                await ai.models.generateContentStream(
-                    {
-                        model:
-                            GEMINI_MODEL,
+        for (let attempt = 1; attempt <= MAX_GEMINI_RETRIES; attempt++) {
+            try {
+                stream = await ai.models.generateContentStream({
+                    model: GEMINI_MODEL,
+                    contents: geminiContents
+                });
+                break;
+            } catch (error) {
+                lastGeminiError = error;
+                const status = Number(error?.status || error?.code || 0);
+                const errorText = String(error?.message || "").toLowerCase();
+                const isTemporary =
+                    status === 429 ||
+                    status === 500 ||
+                    status === 502 ||
+                    status === 503 ||
+                    status === 504 ||
+                    errorText.includes("service unavailable") ||
+                    errorText.includes("high demand") ||
+                    errorText.includes("temporarily unavailable");
 
-                        contents: hasDocument
-                            ? [
-                                {
-                                    role: "user",
-                                    parts: [
-                                        { text: prompt },
-                                        {
-                                            inlineData: {
-                                                mimeType: document.mimeType,
-                                                data: document.data
-                                            }
-                                        }
-                                    ]
-                                }
-                            ]
-                            : prompt
-                    }
+                if (!isTemporary || attempt === MAX_GEMINI_RETRIES) {
+                    break;
+                }
+
+                const delayMs = attempt * 2000;
+                console.warn(
+                    `Gemini temporary error (attempt ${attempt}/${MAX_GEMINI_RETRIES}). Retrying in ${delayMs}ms...`
                 );
+                await new Promise(resolve => setTimeout(resolve, delayMs));
+            }
+        }
 
-        } catch (error) {
+        if (!stream) {
+            const error = lastGeminiError || new Error("Gemini request failed.");
 
             console.error(
                 "Gemini request error:",
