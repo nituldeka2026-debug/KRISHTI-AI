@@ -75,11 +75,9 @@ const GEMINI_API_KEY =
 /*
  * Current Gemini model.
  */
-// Set GEMINI_MODEL in Render only if you have verified that model is
-// available to the API key's Google AI project.
-const GEMINI_MODEL = String(
-    process.env.GEMINI_MODEL || "gemini-2.5-flash"
-).trim();
+const GEMINI_MODEL =
+    process.env.GEMINI_MODEL ||
+    "gemini-3.6-flash";
 
 
 /* =========================================================
@@ -100,52 +98,11 @@ const DATA_DIR = path.join(ROOT, "data");
 const SETTINGS_FILE = path.join(DATA_DIR, "settings.json");
 const FEEDBACK_FILE = path.join(DATA_DIR, "feedback.json");
 const USERS_FILE = path.join(DATA_DIR, "users.json");
+const USAGE_FILE = path.join(DATA_DIR, "usage.json");
 const ADMIN_EMAIL = String(process.env.KRISHTI_ADMIN_EMAIL || "nitul.deka2026@gmail.com").trim().toLowerCase();
 const REQUIRE_AUTH = String(process.env.KRISHTI_REQUIRE_AUTH || "true").toLowerCase() !== "false";
 const RATE_LIMIT_WINDOW_MS = 60 * 1000;
 const rateBuckets = new Map();
-const PLAN_LIMITS = {
-    free: { dailyChat: 10, monthlyChat: 100, monthlyPdf: 10, monthlyImage: 10, monthlySearch: 20, ads: true },
-    plus: { dailyChat: 40, monthlyChat: 1000, monthlyPdf: 50, monthlyImage: 50, monthlySearch: 100, ads: false },
-    pro: { dailyChat: 100, monthlyChat: 3000, monthlyPdf: 200, monthlyImage: 200, monthlySearch: 500, ads: false }
-};
-const usageStore = new Map();
-
-function usagePeriod() {
-    const d = new Date();
-    return { day: d.toISOString().slice(0,10), month: `${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,"0")}` };
-}
-function getUsage(uid) {
-    const p = usagePeriod(), old = usageStore.get(uid);
-    if (!old || old.day !== p.day || old.month !== p.month) {
-        const fresh = { day:p.day, month:p.month, dailyChat:0, monthlyChat:0, monthlyPdf:0, monthlyImage:0, monthlySearch:0 };
-        usageStore.set(uid, fresh);
-        return fresh;
-    }
-    return old;
-}
-function getPlan(uid) {
-    const all = readJsonFile(USERS_FILE, {});
-    const record = all[String(uid)] || {};
-    const plan = String(record.plan || "free").toLowerCase();
-    return PLAN_LIMITS[plan] ? plan : "free";
-}
-function usageSnapshot(uid) {
-    const plan = getPlan(uid);
-    return { plan, usage:{...getUsage(uid)}, limits:{...PLAN_LIMITS[plan]} };
-}
-function consumeUsage(uid, type) {
-    const snap = usageSnapshot(uid), u = getUsage(uid), l = snap.limits;
-    const monthlyKey = {chat:"monthlyChat", pdf:"monthlyPdf", image:"monthlyImage", search:"monthlySearch"}[type];
-    if (type === "chat" && u.dailyChat >= l.dailyChat)
-        return {ok:false, code:"DAILY_LIMIT", error:"Daily AI limit reached.", ...snap};
-    if (monthlyKey && u[monthlyKey] >= l[monthlyKey])
-        return {ok:false, code:"MONTHLY_LIMIT", error:"Monthly plan limit reached. Upgrade your KRISHTI plan for more usage.", ...snap};
-    if (type === "chat") u.dailyChat++;
-    if (monthlyKey) u[monthlyKey]++;
-    return {ok:true, ...usageSnapshot(uid)};
-}
-
 
 const DEFAULT_SETTINGS = {
     profile: { displayName: "Krishti User", aiNickname: "Krishti" },
@@ -163,6 +120,7 @@ function ensureDataStore(){
     if(!fs.existsSync(SETTINGS_FILE)) fs.writeFileSync(SETTINGS_FILE, JSON.stringify({}, null, 2));
     if(!fs.existsSync(FEEDBACK_FILE)) fs.writeFileSync(FEEDBACK_FILE, JSON.stringify([], null, 2));
     if(!fs.existsSync(USERS_FILE)) fs.writeFileSync(USERS_FILE, JSON.stringify({}, null, 2));
+    if(!fs.existsSync(USAGE_FILE)) fs.writeFileSync(USAGE_FILE, JSON.stringify({}, null, 2));
 }
 function readJsonFile(file, fallback){
     try { return JSON.parse(fs.readFileSync(file, "utf8")); } catch { return fallback; }
@@ -172,6 +130,135 @@ function writeJsonFile(file, value){
     const tmp = file + ".tmp";
     fs.writeFileSync(tmp, JSON.stringify(value, null, 2));
     fs.renameSync(tmp, file);
+}
+
+
+/* =========================================================
+   V19 — SERVER-SIDE PLAN + USAGE LIMITS
+   These limits protect the Gemini API from uncontrolled usage.
+   Paid entitlements are intentionally not granted by the client.
+========================================================= */
+const PLAN_LIMITS = {
+    free:  { name:"Free",  chatsDay:10,  chatsMonth:100,  documentsMonth:10,  imagesMonth:10,  searchesMonth:20,  ads:true  },
+    plus:  { name:"Plus",  chatsDay:40,  chatsMonth:1000, documentsMonth:50,  imagesMonth:50,  searchesMonth:100, ads:false },
+    pro:   { name:"Pro",   chatsDay:100, chatsMonth:3000, documentsMonth:200, imagesMonth:200, searchesMonth:500, ads:false }
+};
+
+function usageDayKey(date = new Date()) {
+    return date.toISOString().slice(0,10);
+}
+function usageMonthKey(date = new Date()) {
+    return date.toISOString().slice(0,7);
+}
+function normalisePlan(value) {
+    const plan = String(value || "free").trim().toLowerCase();
+    return PLAN_LIMITS[plan] ? plan : "free";
+}
+function getPlanForUser(user) {
+    const uid = String(user?.uid || "");
+    const email = String(user?.email || "").trim().toLowerCase();
+    const premiumEmails = String(process.env.KRISHTI_PREMIUM_EMAILS || "")
+        .split(",").map(x => x.trim().toLowerCase()).filter(Boolean);
+    const proEmails = String(process.env.KRISHTI_PRO_EMAILS || "")
+        .split(",").map(x => x.trim().toLowerCase()).filter(Boolean);
+    if (email && proEmails.includes(email)) return "pro";
+    if (email && premiumEmails.includes(email)) return "plus";
+    return "free";
+}
+function usageKey(user) {
+    return crypto.createHash("sha256").update(String(user?.uid || "unknown-user")).digest("hex");
+}
+function emptyUsage() {
+    return { day: usageDayKey(), month: usageMonthKey(), chatsDay:0, chatsMonth:0, documentsMonth:0, imagesMonth:0, searchesMonth:0, updatedAt:new Date().toISOString() };
+}
+function getUsageRecord(user) {
+    ensureDataStore();
+    const all = readJsonFile(USAGE_FILE, {});
+    const key = usageKey(user);
+    const current = { ...emptyUsage(), ...(all[key] || {}) };
+    const day = usageDayKey();
+    const month = usageMonthKey();
+    if (current.day !== day) { current.day = day; current.chatsDay = 0; }
+    if (current.month !== month) {
+        current.month = month;
+        current.chatsMonth = 0;
+        current.documentsMonth = 0;
+        current.imagesMonth = 0;
+        current.searchesMonth = 0;
+    }
+    all[key] = current;
+    writeJsonFile(USAGE_FILE, all);
+    return current;
+}
+function saveUsageRecord(user, record) {
+    ensureDataStore();
+    const all = readJsonFile(USAGE_FILE, {});
+    all[usageKey(user)] = { ...record, updatedAt:new Date().toISOString() };
+    writeJsonFile(USAGE_FILE, all);
+}
+function usageSnapshot(user) {
+    const planId = getPlanForUser(user);
+    const plan = PLAN_LIMITS[planId];
+    const usage = getUsageRecord(user);
+    return {
+        plan: planId,
+        planName: plan.name,
+        ads: plan.ads,
+        usage: {
+            chatsDay: usage.chatsDay,
+            chatsMonth: usage.chatsMonth,
+            documentsMonth: usage.documentsMonth,
+            imagesMonth: usage.imagesMonth,
+            searchesMonth: usage.searchesMonth
+        },
+        limits: {
+            chatsDay: plan.chatsDay,
+            chatsMonth: plan.chatsMonth,
+            documentsMonth: plan.documentsMonth,
+            imagesMonth: plan.imagesMonth,
+            searchesMonth: plan.searchesMonth
+        },
+        reset: { day: usage.day, month: usage.month },
+        paymentReady: false
+    };
+}
+function consumeUsage(user, action, amount = 1) {
+    const actions = Array.isArray(action) ? action : [action];
+    const planId = getPlanForUser(user);
+    const plan = PLAN_LIMITS[planId];
+    const usage = getUsageRecord(user);
+    const checks = {
+        chat: [usage.chatsDay, plan.chatsDay, "Daily chat limit reached."],
+        chatMonth: [usage.chatsMonth, plan.chatsMonth, "Monthly chat limit reached."],
+        document: [usage.documentsMonth, plan.documentsMonth, "Monthly PDF/document limit reached."],
+        image: [usage.imagesMonth, plan.imagesMonth, "Monthly image limit reached."],
+        search: [usage.searchesMonth, plan.searchesMonth, "Monthly web-search limit reached."]
+    };
+    const pending = {};
+    for (const a of actions) {
+        if (!checks[a]) continue;
+        pending[a] = (pending[a] || 0) + amount;
+        if (checks[a][0] + pending[a] > checks[a][1]) {
+            const snapshot = usageSnapshot(user);
+            return { ok:false, snapshot, error:checks[a][2] };
+        }
+    }
+    if (pending.chat) { usage.chatsDay += pending.chat; usage.chatsMonth += pending.chat; }
+    if (pending.document) usage.documentsMonth += pending.document;
+    if (pending.image) usage.imagesMonth += pending.image;
+    if (pending.search) usage.searchesMonth += pending.search;
+    if (Object.keys(pending).length) saveUsageRecord(user, usage);
+    return { ok:true, snapshot:usageSnapshot(user) };
+}
+function enforceUsage(req, res, action) {
+    const result = consumeUsage(req.authUser, action, 1);
+    if (result.ok) return true;
+    res.setHeader("Retry-After", "3600");
+    sendJSON(res, 429, { success:false, code:"KRISHTI_PLAN_LIMIT", error:result.error, usage:result.snapshot });
+    return false;
+}
+function handleUsage(req, res) {
+    return sendJSON(res, 200, { success:true, ...usageSnapshot(req.authUser) });
 }
 function mergeSettings(base, incoming){
     const out = { ...base };
@@ -258,18 +345,6 @@ async function secureApi(req,res,handler,limit=30){
         if(REQUIRE_AUTH){
             user=await verifyFirebaseRequest(req);
             req.authUser=user;
-        }
-        const pathname = new URL(req.url, `http://${req.headers.host || "localhost"}`).pathname;
-        const usageType =
-            pathname === "/api/chat" ? "chat" :
-            pathname === "/api/image-generate" || pathname === "/api/image-edit" ? "image" :
-            pathname === "/api/search" ? "search" : null;
-        if (user && usageType) {
-            const quota = consumeUsage(user.uid, usageType);
-            if (!quota.ok) return sendJSON(res, 429, {
-                success:false, error:quota.error, code:quota.code,
-                plan:quota.plan, usage:quota.usage, limits:quota.limits
-            });
         }
         const retry=checkRateLimit(req,user,limit);
         if(retry) {
@@ -648,6 +723,27 @@ Now answer the user.
    GEMINI ERROR MESSAGE
 ========================================================= */
 
+
+function geminiStatus(error) {
+    return Number(error?.status || error?.code || error?.response?.status || 0);
+}
+function isGeminiRateLimit(error) {
+    const status = geminiStatus(error);
+    const text = String(error?.message || "").toLowerCase();
+    return status === 429 || text.includes("resource_exhausted") || text.includes("quota") || text.includes("rate limit") || text.includes("too many requests");
+}
+function sendGeminiFailure(res, error) {
+    if (isGeminiRateLimit(error)) {
+        return sendJSON(res, 429, {
+            success:false,
+            code:"GEMINI_RATE_LIMIT",
+            error:"Gemini API limit reached. Please try again later or check your Gemini project usage/quota.",
+            retryAfterSeconds:60
+        });
+    }
+    return sendText(res, 500, getGeminiErrorMessage(error));
+}
+
 function getGeminiErrorMessage(
     error
 ) {
@@ -784,6 +880,7 @@ async function handleImageEdit(req, res) {
         if (!prompt) {
             return sendJSON(res, 400, { success: false, error: "Please write what you want to change in the photo." });
         }
+        if (!enforceUsage(req, res, "image")) return;
 
         if (!["image/jpeg", "image/png", "image/webp"].includes(mimeType)) {
             return sendJSON(res, 400, { success: false, error: "Only JPG, PNG and WEBP images are supported." });
@@ -819,7 +916,7 @@ async function handleImageEdit(req, res) {
 
     } catch (error) {
         console.error("Image edit API error:", error);
-        return sendJSON(res, 500, { success: false, error: getGeminiErrorMessage(error) });
+        return sendGeminiFailure(res, error);
     }
 }
 
@@ -838,6 +935,7 @@ async function handleImageGenerate(req, res) {
         const era = typeof data.era === "string" ? data.era.trim().toLowerCase() : "none";
         if (!GEMINI_API_KEY) return sendJSON(res,500,{success:false,error:"Gemini API key is not configured on the server."});
         if (!prompt) return sendJSON(res,400,{success:false,error:"Please describe the image you want Krishti to create."});
+        if (!enforceUsage(req, res, "image")) return;
         const eraInstruction = era === "past"
             ? "Transform the concept into a believable past-era photograph. Use historically appropriate clothing, architecture, objects, film grain, lighting and camera characteristics."
             : era === "future"
@@ -855,7 +953,7 @@ async function handleImageGenerate(req, res) {
         return sendJSON(res,200,{success:true,image:imagePart.inlineData.data,mimeType:imagePart.inlineData.mimeType||"image/png"});
     } catch(error) {
         console.error("Image generation API error:",error);
-        return sendJSON(res,500,{success:false,error:getGeminiErrorMessage(error)});
+        return sendGeminiFailure(res, error);
     }
 }
 
@@ -872,6 +970,7 @@ async function handleSearch(req, res) {
 
         const message = typeof data.message === "string" ? data.message.trim() : "";
         if (!message) return sendJSON(res, 400, { success: false, error: "Please enter a search query." });
+        if (!enforceUsage(req, res, "search")) return;
         if (message.length > MAX_MESSAGE_LENGTH) return sendJSON(res, 400, { success: false, error: "Search query is too long." });
         if (!GEMINI_API_KEY) return sendText(res, 500, "Gemini API key is not configured on the server.");
 
@@ -889,7 +988,7 @@ async function handleSearch(req, res) {
             });
         } catch (error) {
             console.error("Gemini web search error:", error);
-            return sendText(res, 500, getGeminiErrorMessage(error));
+            return sendGeminiFailure(res, error);
         }
 
         let text = typeof result?.text === "string" ? result.text : "";
@@ -999,6 +1098,8 @@ async function handleChat(
             );
         }
 
+
+        if (!enforceUsage(req, res, hasDocument ? ["chat", "document"] : "chat")) return;
 
         /* =========================================
            API KEY CHECK
@@ -1118,7 +1219,6 @@ async function handleChat(
                 const status = Number(error?.status || error?.code || 0);
                 const errorText = String(error?.message || "").toLowerCase();
                 const isTemporary =
-                    status === 429 ||
                     status === 500 ||
                     status === 502 ||
                     status === 503 ||
@@ -1148,13 +1248,7 @@ async function handleChat(
             );
 
 
-            return sendText(
-                res,
-                500,
-                getGeminiErrorMessage(
-                    error
-                )
-            );
+            return sendGeminiFailure(res, error);
         }
 
 
@@ -1334,13 +1428,14 @@ function handleHealth(
         {
             success: true,
             app: "Krishti AI",
-            version: "18.0.0",
+            version: "19.0.0",
             ai: "Gemini",
             model: GEMINI_MODEL,
             memory: "enabled",
             streaming: true,
             imageEditing: true,
             imageModel: IMAGE_EDIT_MODEL,
+            plans: Object.keys(PLAN_LIMITS),
             status: "online"
         }
     );
@@ -1562,6 +1657,11 @@ const server =
 
 
 
+            if (req.method === "GET" && pathname === "/api/usage") {
+                secureApi(req,res,handleUsage,60);
+                return;
+            }
+
             if (req.method === "POST" && pathname === "/api/activity") {
                 secureApi(req,res,handleActivity,60);
                 return;
@@ -1569,11 +1669,6 @@ const server =
 
             if (req.method === "GET" && pathname === "/api/admin/stats") {
                 secureApi(req,res,async (r,rr)=>handleAdminStats(r,rr),30);
-                return;
-            }
-
-            if (req.method === "GET" && pathname === "/api/usage") {
-                secureApi(req,res,async (r,rr)=>sendJSON(rr,200,{success:true,...usageSnapshot(r.authUser.uid)}),60);
                 return;
             }
 
@@ -1658,7 +1753,7 @@ server.listen(
         );
 
         console.log(
-            "        KRISHTI AI V2"
+            "        KRISHTI AI V19"
         );
 
         console.log(
@@ -1694,7 +1789,7 @@ server.listen(
         );
 
         console.log(
-            "KRISHTI AI V4 is ready!"
+            "KRISHTI AI V19 is ready!"
         );
 
         console.log(

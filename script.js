@@ -380,9 +380,24 @@ async function loadMyDashboard(){
     document.getElementById("myDashLastSeen").textContent="Last activity: just now";
     const avatar=document.getElementById("myDashAvatar");
     if(u?.photoURL) avatar.innerHTML=`<img src="${u.photoURL}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`; else avatar.textContent=(u?.displayName||u?.email||"K").charAt(0).toUpperCase();
-    // Counts are stored locally for the personal view; no other users are exposed.
-    const key="krishti_usage_"+(u?.uid||u?.email||"local"); const usage=JSON.parse(localStorage.getItem(key)||"{}");
-    document.getElementById("myChats").textContent=usage.chats||0; document.getElementById("myImages").textContent=usage.images||0; document.getElementById("mySearches").textContent=usage.searches||0; document.getElementById("myDocuments").textContent=usage.documents||0;
+    const key="krishti_usage_"+(u?.uid||u?.email||"local"); const localUsage=JSON.parse(localStorage.getItem(key)||"{}");
+    document.getElementById("myChats").textContent=localUsage.chats||0; document.getElementById("myImages").textContent=localUsage.images||0; document.getElementById("mySearches").textContent=localUsage.searches||0; document.getElementById("myDocuments").textContent=localUsage.documents||0;
+    try {
+        const r=await fetch("/api/usage",{headers:await krishtiAuthHeaders(),cache:"no-store"});
+        const data=await r.json();
+        if(!r.ok) throw new Error(data.error||"Usage unavailable");
+        const lim=data.limits, used=data.usage;
+        document.getElementById("myPlanBadge").textContent=data.planName||"Free";
+        document.getElementById("myChatDay").textContent=`${used.chatsDay}/${lim.chatsDay}`;
+        document.getElementById("myChatMonth").textContent=`${used.chatsMonth}/${lim.chatsMonth}`;
+        document.getElementById("myDocsMonth").textContent=`${used.documentsMonth}/${lim.documentsMonth}`;
+        document.getElementById("myImagesMonth").textContent=`${used.imagesMonth}/${lim.imagesMonth}`;
+        document.getElementById("mySearchesMonth").textContent=`${used.searchesMonth}/${lim.searchesMonth}`;
+        document.getElementById("myUsageNote").textContent=data.paymentReady ? "Plan entitlement verified." : "Paid plans are not charged in V19 yet. Payment integration comes after this foundation.";
+    } catch(e) {
+        document.getElementById("myUsageNote").textContent="Server usage is temporarily unavailable. Local activity is still shown above.";
+        console.warn("Krishti usage:",e.message);
+    }
 }
 function bumpPersonalUsage(action){
     const u=window.KRISHTI_USER; if(!u) return; const key="krishti_usage_"+(u.uid||u.email||"local"); const x=JSON.parse(localStorage.getItem(key)||"{}"); const map={chat:"chats",image:"images",search:"searches",document:"documents"}; if(map[action]) x[map[action]]=(x[map[action]]||0)+1; localStorage.setItem(key,JSON.stringify(x));
@@ -858,6 +873,15 @@ function setSendingState(state) {
 }
 
 
+async function readKrishtiApiError(response, fallback="Krishti AI request failed.") {
+    try {
+        const data=await response.clone().json();
+        return data?.error || fallback;
+    } catch (_) {
+        try { return (await response.text()) || fallback; } catch (_) { return fallback; }
+    }
+}
+
 // =========================================================
 // SEND MESSAGE
 // =========================================================
@@ -990,8 +1014,8 @@ async function sendMessage(customMessage = null) {
             });
             if (typing) typing.remove();
             const aiBubble = addMessage("", "ai");
-            const text = await response.text();
-            if (!response.ok) { aiBubble.textContent = text || "Web search failed."; return; }
+            const text = response.ok ? await response.text() : await readKrishtiApiError(response, "Web search failed.");
+            if (!response.ok) { aiBubble.textContent = text; return; }
             aiBubble.textContent = text || "No search result was returned.";
             const lastMessage = currentMessages[currentMessages.length - 1];
             if (lastMessage && lastMessage.sender === "ai") lastMessage.text = aiBubble.textContent;
@@ -1046,8 +1070,7 @@ async function sendMessage(customMessage = null) {
         if (typing) typing.remove();
 
         if (!response.ok) {
-            let errorText = await response.text();
-            if (!errorText) errorText = "Something went wrong.";
+            const errorText = await readKrishtiApiError(response, "Something went wrong.");
             addMessage(errorText, "ai");
             return;
         }
@@ -1073,6 +1096,7 @@ async function sendMessage(customMessage = null) {
 
         fullText += decoder.decode();
         aiBubble.textContent = fullText || "Sorry, I couldn't generate a response.";
+        if (document.getElementById("dashboardView") && !document.getElementById("dashboardView").hidden) loadMyDashboard();
         const lastMessage = currentMessages[currentMessages.length - 1];
         if (lastMessage && lastMessage.sender === "ai") lastMessage.text = aiBubble.textContent;
         persistMessages();
@@ -2002,7 +2026,7 @@ async function syncCloudMemoryToLocal() {
 async function exportCloudBackup() {
     const cloudChats = await cloudLoadChats();
     const cloudMemory = await cloudLoadMemory();
-    const backup = {version:17, app:"Krishti AI", exportedAt:new Date().toISOString(), chats:cloudChats.length ? cloudChats : chats, memory:cloudMemory.length ? cloudMemory : getLocalMemory(), settings:window.KRISHTI_SETTINGS || {}};
+    const backup = {version:19, app:"Krishti AI", exportedAt:new Date().toISOString(), chats:cloudChats.length ? cloudChats : chats, memory:cloudMemory.length ? cloudMemory : getLocalMemory(), settings:window.KRISHTI_SETTINGS || {}};
     const blob = new Blob([JSON.stringify(backup,null,2)], {type:"application/json"});
     const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download=`krishti-ai-backup-${new Date().toISOString().slice(0,10)}.json`; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),1000);
     showToast("Backup exported");
@@ -2121,18 +2145,18 @@ window.syncCloudMemoryToLocal = syncCloudMemoryToLocal;
       'Mobile Experience':['📱 Mobile Experience','Mobile-first controls for Android and small screens.', `<div class="setting-card">${toggle('mobileOptimized','app.mobileOptimized','Mobile layout','Use Krishti mobile drawer and compact utility views.')}${card('Installable app','PWA manifest and service worker are included.', '<span class="setting-value">Prepared</span>')}</div>`],
       'Notifications':['🔔 Notifications','Control local Krishti status messages.', `<div class="setting-card">${toggle('notifications','app.notifications','Krishti notifications','Show helpful status messages and confirmations.')}</div>`],
       'Offline & Network':['📶 Offline & Network','Choose how Krishti behaves when the network is unavailable.', `<div class="setting-card">${toggle('offlineMode','app.offlineMode','Offline shell','Keep the app shell and cached assets available offline.')}${card('AI requests','Gemini chat, web search and image generation require a network.', '<span class="setting-value">Online required</span>')}</div>`],
-      'App Updates':['🚀 App Updates','Keep the installable Krishti app current.', `<div class="setting-card">${toggle('autoUpdate','app.autoUpdate','Automatic app refresh','Allow the service worker to refresh cached assets.')}${card('Current release','Krishti AI V14 Settings 2.0', '<span class="setting-value">V14.0</span>')}</div>`],
-      "What's New":['✨ What’s New','Recent Krishti improvements in this build.', `<div class="setting-card"><div class="settings-release"><b>V14.0 — Krishti Settings 2.0</b><span>Custom Control Center • backend settings sync • mobile-first settings • real persistence</span></div><div class="settings-release"><b>V13.0</b><span>Modes • local memory • Library • voice • PWA preparation</span></div></div>`],
+      'App Updates':['🚀 App Updates','Keep the installable Krishti app current.', `<div class="setting-card">${toggle('autoUpdate','app.autoUpdate','Automatic app refresh','Allow the service worker to refresh cached assets.')}${card('Current release','Krishti AI V19 Production Foundation', '<span class="setting-value">V19.0</span>')}</div>`],
+      "What's New":['✨ What’s New','Recent Krishti improvements in this build.', `<div class="setting-card"><div class="settings-release"><b>V19.0 — Production Foundation</b><span>Custom Control Center • backend settings sync • mobile-first settings • real persistence</span></div><div class="settings-release"><b>V13.0</b><span>Modes • local memory • Library • voice • PWA preparation</span></div></div>`],
       'Krishti Labs':['🧪 Krishti Labs','Experimental features that may change.', `<div class="setting-card">${toggle('pluginsEnabled2','tools.pluginsEnabled','Connected Tools beta','Keep future integrations available for testing.')}${toggle('offlineMode2','app.offlineMode','Offline shell beta','Use the service-worker cache when possible.')}</div>`],
       'Help':['❓ Help','Quick help for using Krishti AI.', `<div class="setting-card">${card('How to chat','Type a message and press Send. Use the + menu for files, images and tools.','<button class="setting-button" data-action="help-chat">Show</button>')}${card('Mobile sidebar','Tap the menu icon to open the Krishti drawer.','<button class="setting-button" data-action="help-mobile">Show</button>')}</div>`],
       'Report a Problem':['🐞 Report a Problem','Send a bug report to the Krishti backend.', `<div class="setting-card"><textarea id="bugReport" class="setting-textarea" placeholder="What happened? Include steps to reproduce."></textarea><button id="sendBugReport" class="setting-button primary" type="button">Send report</button></div>`],
-      'About Krishti AI':['💜 About Krishti AI','Your custom AI assistant.', `<div class="setting-card">${card('Version','Current Krishti release.','<span class="setting-value">V14.0</span>')}${card('Frontend','Custom Krishti Settings 2.0 UI.','<span class="setting-value">Connected</span>')}${card('Backend','Node.js settings API with per-user storage key.','<span class="setting-value">Connected</span>')}</div>`],
+      'About Krishti AI':['💜 About Krishti AI','Your custom AI assistant.', `<div class="setting-card">${card('Version','Current Krishti release.','<span class="setting-value">V19.0</span>')}${card('Frontend','Custom Krishti Settings 2.0 UI.','<span class="setting-value">Connected</span>')}${card('Backend','Node.js settings API with per-user storage key.','<span class="setting-value">Connected</span>')}</div>`],
       'Log out':['↪ Log out','End your current Krishti AI session.', `<div class="setting-card">${card('Log out of Krishti','You can sign in again anytime.','<button class="setting-button danger" data-action="logout">Log out</button>')}</div>`]
     };
 
     function renderSettingsSection(section){
         const d=info[section]||info['Krishti Profile'];
-        return `<div class="settings-panel"><div class="settings-kicker">KRISHTI AI • V14</div><h1>${d[0]}</h1><p>${d[1]}</p>${d[2]}</div>`;
+        return `<div class="settings-panel"><div class="settings-kicker">KRISHTI AI • V19</div><h1>${d[0]}</h1><p>${d[1]}</p>${d[2]}</div>`;
     }
     function applySettings(){
         const light=val('experience.theme')==='light';
