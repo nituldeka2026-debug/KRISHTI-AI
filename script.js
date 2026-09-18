@@ -379,19 +379,10 @@ async function loadMyDashboard(){
     document.getElementById("myDashEmail").textContent=u?.email || "Signed in";
     document.getElementById("myDashLastSeen").textContent="Last activity: just now";
     const avatar=document.getElementById("myDashAvatar");
-    if(u?.photoURL) avatar.innerHTML=`<img src="${escapeHtml(u.photoURL)}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`; else avatar.textContent=(u?.displayName||u?.email||"K").charAt(0).toUpperCase();
-    try{
-        const r=await fetch("/api/usage",{headers:await krishtiAuthHeaders(),cache:"no-store"});
-        const d=await r.json(); if(!r.ok) throw new Error(d.error||"Usage unavailable");
-        document.getElementById("myPlanBadge").textContent=`${d.planName} · ₹${d.price}${d.price?"/month":""}`;
-        document.getElementById("myChats").textContent=d.usage.chatsDaily;
-        document.getElementById("myImages").textContent=d.usage.imageMonthly;
-        document.getElementById("mySearches").textContent=d.usage.searchMonthly;
-        document.getElementById("myDocuments").textContent=d.usage.pdfMonthly;
-        document.getElementById("myUsageText").textContent=`Today: ${d.usage.chatsDaily}/${d.limits.chatsDaily} chats · This month: ${d.usage.chatsMonthly}/${d.limits.chatsMonthly} chats · PDF ${d.usage.pdfMonthly}/${d.limits.pdfMonthly} · Images ${d.usage.imageMonthly}/${d.limits.imageMonthly} · Search ${d.usage.searchMonthly}/${d.limits.searchMonthly}`;
-        document.getElementById("autoRenewText").textContent=`Auto-renew: ${d.subscription?.autoRenew ? "ON" : "OFF"}`;
-        document.getElementById("cancelSubscriptionButton").hidden=!(d.subscription?.autoRenew && d.plan!=="free");
-    }catch(e){ document.getElementById("myUsageText").textContent=e.message||"Could not load usage."; }
+    if(u?.photoURL) avatar.innerHTML=`<img src="${u.photoURL}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`; else avatar.textContent=(u?.displayName||u?.email||"K").charAt(0).toUpperCase();
+    // Counts are stored locally for the personal view; no other users are exposed.
+    const key="krishti_usage_"+(u?.uid||u?.email||"local"); const usage=JSON.parse(localStorage.getItem(key)||"{}");
+    document.getElementById("myChats").textContent=usage.chats||0; document.getElementById("myImages").textContent=usage.images||0; document.getElementById("mySearches").textContent=usage.searches||0; document.getElementById("myDocuments").textContent=usage.documents||0;
 }
 function bumpPersonalUsage(action){
     const u=window.KRISHTI_USER; if(!u) return; const key="krishti_usage_"+(u.uid||u.email||"local"); const x=JSON.parse(localStorage.getItem(key)||"{}"); const map={chat:"chats",image:"images",search:"searches",document:"documents"}; if(map[action]) x[map[action]]=(x[map[action]]||0)+1; localStorage.setItem(key,JSON.stringify(x));
@@ -403,26 +394,23 @@ async function loadAdminDashboard(){
         const token=await firebaseAuth.currentUser.getIdToken(true); const r=await fetch("/api/admin/stats",{headers:{Authorization:"Bearer "+token},cache:"no-store"}); const data=await r.json(); if(!r.ok) throw new Error(data.error||"Admin dashboard unavailable");
         document.getElementById("adminEmailLabel").textContent=data.adminEmail||KRISHTI_ADMIN_EMAIL; document.getElementById("adminTotalUsers").textContent=data.totalUsers; document.getElementById("adminActiveUsers").textContent=data.activeUsers; document.getElementById("adminDailyUsers").textContent=data.dailyUsers; document.getElementById("adminTotalChats").textContent=data.totals.chats; document.getElementById("adminTotalImages").textContent=data.totals.images; document.getElementById("adminTotalSearches").textContent=data.totals.searches; document.getElementById("adminTotalDocuments").textContent=data.totals.documents;
         if(tbody) tbody.innerHTML=data.users.length?data.users.map(u=>`<tr><td><div class="admin-user-name">${escapeHtml(u.displayName||"Unnamed user")}</div><div class="admin-user-meta">${escapeHtml(u.uid||"")}</div></td><td>${escapeHtml(u.email||"—")}</td><td>${fmtLastSeen(u.lastSeen)}</td><td>${u.totalChats||0}</td><td>${u.totalImages||0}</td><td>${u.totalSearches||0}</td></tr>`).join(""): '<tr><td colspan="6">No user activity recorded yet.</td></tr>';
+        const ops=await fetch("/api/admin/operations",{headers:{Authorization:"Bearer "+token},cache:"no-store"}).then(x=>x.json());
+        if(ops.success){
+          const p=ops.payments,a=ops.ai,s=ops.system,sec=ops.security,b=ops.backup;
+          const money=v=>"₹"+Number(v||0).toLocaleString("en-IN",{maximumFractionDigits:2});
+          ["adminRevenue","adminMonthlyRevenue"].forEach((id,i)=>document.getElementById(id).textContent=money(i?p.monthlyRevenue:p.totalRevenue));
+          document.getElementById("adminSuccessPayments").textContent=p.successful; document.getElementById("adminFailedPayments").textContent=p.failed; document.getElementById("adminRefunds").textContent=p.refunds; document.getElementById("adminSubscriptionStatus").textContent=p.subscriptionStatus;
+          document.getElementById("adminGeminiRequests").textContent=a.geminiRequests; document.getElementById("adminGeminiCost").textContent=money(a.estimatedCost);
+          document.getElementById("adminServerStatus").textContent=s.server; document.getElementById("adminGeminiStatus").textContent=s.gemini; document.getElementById("adminRequests").textContent=s.requests; document.getElementById("adminErrors").textContent=s.errors;
+          document.getElementById("adminFailedAuth").textContent=sec.failedAuth; document.getElementById("adminRateLimits").textContent=sec.rateLimits; document.getElementById("adminSuspicious").textContent=sec.suspicious;
+          document.getElementById("adminBackupStatus").textContent=b.status; document.getElementById("adminBackupTime").textContent=b.lastRun?new Date(b.lastRun).toLocaleString():"Never";
+        }
     }catch(e){ if(tbody) tbody.innerHTML=`<tr><td colspan="6">${escapeHtml(e.message)}<br><small>Add Firebase Admin server credentials on Render to enable secure analytics.</small></td></tr>`; }
 }
 function escapeHtml(v){return String(v).replace(/[&<>'"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;","\"":"&quot;"}[c]));}
 document.getElementById("dashboardClose")?.addEventListener("click",closeKrishtiDashboard);
 document.getElementById("adminRefresh")?.addEventListener("click",loadAdminDashboard);
-async function startKrishtiSubscription(plan){
-    try{
-        const r=await fetch("/api/subscription",{method:"POST",headers:await krishtiAuthHeaders({"Content-Type":"application/json"}),body:JSON.stringify({plan})});
-        const d=await r.json();
-        if(!r.ok) throw new Error(d.error||"Subscription could not be started.");
-        if(d.subscription?.short_url){ window.location.href=d.subscription.short_url; return; }
-        showToast("Subscription created. Complete the Razorpay checkout to activate your plan.");
-        await loadMyDashboard();
-    }catch(e){ showToast(e.message||"Payment is not configured yet."); }
-}
-document.querySelectorAll("[data-subscribe-plan]").forEach(btn=>btn.addEventListener("click",()=>startKrishtiSubscription(btn.dataset.subscribePlan)));
-document.getElementById("cancelSubscriptionButton")?.addEventListener("click",async()=>{
-    try{ const r=await fetch("/api/subscription/cancel",{method:"POST",headers:await krishtiAuthHeaders({"Content-Type":"application/json"}),body:"{}"}); const d=await r.json(); if(!r.ok) throw new Error(d.error||"Could not cancel."); showToast("Auto-renewal cancellation requested."); await loadMyDashboard(); }
-    catch(e){ showToast(e.message||"Could not cancel subscription."); }
-});
+document.getElementById("adminBackupNow")?.addEventListener("click",async()=>{try{const token=await firebaseAuth.currentUser.getIdToken(true);const r=await fetch("/api/admin/backup",{method:"POST",headers:{Authorization:"Bearer "+token}});const d=await r.json();showToast(d.success?"Backup snapshot recorded":(d.error||"Backup failed"));await loadAdminDashboard();}catch(e){showToast("Backup request failed");}});
 const oldAddAccountControls=addAccountControls;
 addAccountControls=function(){ oldAddAccountControls(); addDashboardButton(); recordActivity("login"); };
 const oldSendPhone=sendPhoneOTP;

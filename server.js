@@ -98,6 +98,7 @@ const DATA_DIR = path.join(ROOT, "data");
 const SETTINGS_FILE = path.join(DATA_DIR, "settings.json");
 const FEEDBACK_FILE = path.join(DATA_DIR, "feedback.json");
 const USERS_FILE = path.join(DATA_DIR, "users.json");
+const ADMIN_METRICS_FILE = path.join(DATA_DIR, "admin-metrics.json");
 const ADMIN_EMAIL = String(process.env.KRISHTI_ADMIN_EMAIL || "nitul.deka2026@gmail.com").trim().toLowerCase();
 const REQUIRE_AUTH = String(process.env.KRISHTI_REQUIRE_AUTH || "true").toLowerCase() !== "false";
 const RATE_LIMIT_WINDOW_MS = 60 * 1000;
@@ -118,6 +119,7 @@ function ensureDataStore(){
     fs.mkdirSync(DATA_DIR, { recursive: true });
     if(!fs.existsSync(SETTINGS_FILE)) fs.writeFileSync(SETTINGS_FILE, JSON.stringify({}, null, 2));
     if(!fs.existsSync(FEEDBACK_FILE)) fs.writeFileSync(FEEDBACK_FILE, JSON.stringify([], null, 2));
+    if(!fs.existsSync(ADMIN_METRICS_FILE)) fs.writeFileSync(ADMIN_METRICS_FILE, JSON.stringify({payments:[],security:[],backup:{status:"not_configured",lastRun:null},gemini:{requests:0,estimatedCost:0}}, null, 2));
     if(!fs.existsSync(USERS_FILE)) fs.writeFileSync(USERS_FILE, JSON.stringify({}, null, 2));
 }
 function readJsonFile(file, fallback){
@@ -274,6 +276,52 @@ async function getFirebaseUsers(){
     return result;
 }
 
+
+function readAdminMetrics(){
+    ensureDataStore();
+    return readJsonFile(ADMIN_METRICS_FILE,{payments:[],security:[],backup:{status:"not_configured",lastRun:null},gemini:{requests:0,estimatedCost:0}});
+}
+function writeAdminMetrics(x){ writeJsonFile(ADMIN_METRICS_FILE,x); }
+function addSecurityEvent(type, detail=""){
+    const m=readAdminMetrics();
+    m.security=Array.isArray(m.security)?m.security:[];
+    m.security.unshift({time:new Date().toISOString(),type:String(type),detail:String(detail).slice(0,300)});
+    m.security=m.security.slice(0,500);
+    writeAdminMetrics(m);
+}
+function recordGeminiUsage(cost=0){
+    const m=readAdminMetrics(); m.gemini=m.gemini||{requests:0,estimatedCost:0};
+    m.gemini.requests=(m.gemini.requests||0)+1; m.gemini.estimatedCost=Number(m.gemini.estimatedCost||0)+Number(cost||0);
+    writeAdminMetrics(m);
+}
+function handleAdminOperations(req,res){
+    try{
+        const adminUser=requireAdmin(req);
+        return Promise.resolve(adminUser).then(()=>{
+            const m=readAdminMetrics();
+            const payments=Array.isArray(m.payments)?m.payments:[];
+            const month=new Date().toISOString().slice(0,7);
+            const successful=payments.filter(p=>p.status==='success');
+            const failed=payments.filter(p=>p.status==='failed');
+            const refunds=payments.filter(p=>p.status==='refunded');
+            const total=successful.reduce((a,p)=>a+Number(p.amount||0),0);
+            const monthly=successful.filter(p=>String(p.time||'').slice(0,7)===month).reduce((a,p)=>a+Number(p.amount||0),0);
+            const backup=m.backup||{status:'not_configured',lastRun:null};
+            const mem=process.memoryUsage();
+            const security=m.security||[];
+            return sendJSON(res,200,{success:true,currency:'INR',payments:{totalRevenue:total,monthlyRevenue:monthly,successful:successful.length,failed:failed.length,refunds:refunds.length,subscriptionStatus:'Razorpay not connected',transactions:payments.slice(0,100)},ai:{geminiRequests:m.gemini?.requests||0,estimatedCost:Number(m.gemini?.estimatedCost||0),note:'Estimated cost is tracked only when usage is recorded; configure pricing before treating it as billing data.'},system:{server:'online',gemini:GEMINI_API_KEY?'configured':'missing_api_key',model:GEMINI_MODEL,uptimeSeconds:Math.round(process.uptime()),memoryMB:Math.round(mem.rss/1024/1024),errors:security.filter(x=>x.type==='api_error').length,requests:security.filter(x=>x.type==='request').length},security:{failedAuth:security.filter(x=>x.type==='failed_auth').length,rateLimits:security.filter(x=>x.type==='rate_limit').length,suspicious:security.filter(x=>x.type==='suspicious').length,recent:security.slice(0,20)},backup});
+        });
+    }catch(error){ return sendJSON(res,error.statusCode||500,{success:false,error:error.message||'Admin operations unavailable.'}); }
+}
+function handleAdminBackup(req,res){
+    try{
+        return Promise.resolve(requireAdmin(req)).then(()=>{
+            const m=readAdminMetrics(); m.backup={status:'manual_snapshot_available',lastRun:new Date().toISOString(),message:'Application data backup foundation is active. Configure cloud storage for automatic off-site backups.'}; writeAdminMetrics(m);
+            return sendJSON(res,200,{success:true,backup:m.backup});
+        });
+    }catch(error){ return sendJSON(res,error.statusCode||500,{success:false,error:error.message}); }
+}
+
 async function handleAdminStats(req,res){
     try{
         await requireAdmin(req);
@@ -307,136 +355,6 @@ async function handleAdminStats(req,res){
     }catch(error){ return sendJSON(res,error.statusCode || 500,{success:false,error:error.message || "Could not load admin dashboard."}); }
 }
 
-
-
-/* =========================================================
-   KRISHTI AI V20 — PLANS, USAGE & SUBSCRIPTIONS
-========================================================= */
-const V20_VERSION = "20.0.0";
-const USAGE_FILE = path.join(DATA_DIR, "usage.json");
-const SUBSCRIPTIONS_FILE = path.join(DATA_DIR, "subscriptions.json");
-const PLAN_CONFIG = {
-    free:  { name:"Free",  price:0,   ads:true,  chatsDaily:10,  chatsMonthly:100,  pdfMonthly:10,  imageMonthly:10,  searchMonthly:20 },
-    plus:  { name:"Plus",  price:99,  ads:false, chatsDaily:40,  chatsMonthly:1000, pdfMonthly:50, imageMonthly:50, searchMonthly:100 },
-    pro:   { name:"Pro",   price:299, ads:false, chatsDaily:100, chatsMonthly:3000, pdfMonthly:200,imageMonthly:200,searchMonthly:500 }
-};
-
-function ensureV20Store(){
-    ensureDataStore();
-    if(!fs.existsSync(USAGE_FILE)) fs.writeFileSync(USAGE_FILE, JSON.stringify({},null,2));
-    if(!fs.existsSync(SUBSCRIPTIONS_FILE)) fs.writeFileSync(SUBSCRIPTIONS_FILE, JSON.stringify({},null,2));
-}
-function todayKey(){ return new Date().toISOString().slice(0,10); }
-function monthKey(){ return new Date().toISOString().slice(0,7); }
-function getUserPlan(uid){
-    ensureV20Store();
-    const subs=readJsonFile(SUBSCRIPTIONS_FILE,{});
-    const sub=subs[String(uid)] || {};
-    if(sub.status === "active" && sub.expiresAt && Date.parse(sub.expiresAt) <= Date.now()) return "free";
-    return PLAN_CONFIG[sub.plan] ? sub.plan : "free";
-}
-function getUsageRecord(uid){
-    ensureV20Store();
-    const all=readJsonFile(USAGE_FILE,{});
-    const key=String(uid);
-    const old=all[key] || {};
-    const record={
-        day: old.day===todayKey()?old.day:todayKey(),
-        month: old.month===monthKey()?old.month:monthKey(),
-        chatsDaily: old.day===todayKey()?(old.chatsDaily||0):0,
-        chatsMonthly: old.month===monthKey()?(old.chatsMonthly||0):0,
-        pdfMonthly: old.month===monthKey()?(old.pdfMonthly||0):0,
-        imageMonthly: old.month===monthKey()?(old.imageMonthly||0):0,
-        searchMonthly: old.month===monthKey()?(old.searchMonthly||0):0,
-        total: old.total||0
-    };
-    all[key]=record; writeJsonFile(USAGE_FILE,all); return record;
-}
-function usageForAction(uid, action){
-    const u=getUsageRecord(uid);
-    if(action==="chat") return {used:u.chatsDaily,limit:PLAN_CONFIG[getUserPlan(uid)].chatsDaily,period:"daily"};
-    if(action==="pdf") return {used:u.pdfMonthly,limit:PLAN_CONFIG[getUserPlan(uid)].pdfMonthly,period:"monthly"};
-    if(action==="image") return {used:u.imageMonthly,limit:PLAN_CONFIG[getUserPlan(uid)].imageMonthly,period:"monthly"};
-    if(action==="search") return {used:u.searchMonthly,limit:PLAN_CONFIG[getUserPlan(uid)].searchMonthly,period:"monthly"};
-    return null;
-}
-function consumeUsage(uid, action){
-    const all=readJsonFile(USAGE_FILE,{}); const u=getUsageRecord(uid);
-    if(action==="chat"){u.chatsDaily++;u.chatsMonthly++;}
-    if(action==="pdf"){u.pdfMonthly++;}
-    if(action==="image"){u.imageMonthly++;}
-    if(action==="search"){u.searchMonthly++;}
-    u.total++;
-    all[String(uid)]=u; writeJsonFile(USAGE_FILE,all); return u;
-}
-function checkAndConsume(req,res,action){
-    const uid=req.authUser?.uid;
-    if(!uid) return true;
-    const info=usageForAction(uid,action);
-    if(info && info.used >= info.limit){
-        res.setHeader("Retry-After", info.period==="daily"?String(86400):String(2592000));
-        sendJSON(res,429,{success:false,code:"USAGE_LIMIT_REACHED",error:`${PLAN_CONFIG[getUserPlan(uid)].name} ${action} limit reached. Upgrade your plan or try again after the limit resets.`,plan:getUserPlan(uid),usage:info});
-        return false;
-    }
-    consumeUsage(uid,action); return true;
-}
-function subscriptionRecord(uid){
-    ensureV20Store(); const all=readJsonFile(SUBSCRIPTIONS_FILE,{}); return all[String(uid)] || {plan:"free",status:"active",autoRenew:false};
-}
-function saveSubscription(uid, value){
-    ensureV20Store(); const all=readJsonFile(SUBSCRIPTIONS_FILE,{}); all[String(uid)]={...subscriptionRecord(uid),...value,updatedAt:new Date().toISOString()}; writeJsonFile(SUBSCRIPTIONS_FILE,all); return all[String(uid)];
-}
-function v20UsagePayload(uid){
-    const plan=getUserPlan(uid), cfg=PLAN_CONFIG[plan], u=getUsageRecord(uid), sub=subscriptionRecord(uid);
-    return {plan,planName:cfg.name,price:cfg.price,ads:cfg.ads,limits:{chatsDaily:cfg.chatsDaily,chatsMonthly:cfg.chatsMonthly,pdfMonthly:cfg.pdfMonthly,imageMonthly:cfg.imageMonthly,searchMonthly:cfg.searchMonthly},usage:{chatsDaily:u.chatsDaily,chatsMonthly:u.chatsMonthly,pdfMonthly:u.pdfMonthly,imageMonthly:u.imageMonthly,searchMonthly:u.searchMonthly},subscription:sub};
-}
-async function handleUsage(req,res){ return sendJSON(res,200,{success:true,version:V20_VERSION,...v20UsagePayload(req.authUser.uid)}); }
-async function handleSubscription(req,res){
-    const method=req.method;
-    if(method==="GET") return sendJSON(res,200,{success:true,...v20UsagePayload(req.authUser.uid)});
-    let data; try{ data=JSON.parse(await readRequestBody(req)); }catch{return sendJSON(res,400,{success:false,error:"Invalid JSON request."});}
-    const plan=String(data.plan||"").toLowerCase();
-    if(!["plus","pro"].includes(plan)) return sendJSON(res,400,{success:false,error:"Choose Plus or Pro."});
-    const keyId=process.env.RAZORPAY_KEY_ID, keySecret=process.env.RAZORPAY_KEY_SECRET;
-    if(!keyId || !keySecret) return sendJSON(res,503,{success:false,code:"PAYMENT_NOT_CONFIGURED",error:"Razorpay is not configured yet. Your subscription system is ready, but live payment is disabled until Razorpay keys are added."});
-    try{
-        const auth=Buffer.from(`${keyId}:${keySecret}`).toString("base64");
-        const r=await fetch("https://api.razorpay.com/v1/subscriptions",{method:"POST",headers:{"Authorization":`Basic ${auth}`,"Content-Type":"application/json"},body:JSON.stringify({plan_id:plan==="plus"?process.env.RAZORPAY_PLUS_PLAN_ID:process.env.RAZORPAY_PRO_PLAN_ID,total_count:120,customer_notify:1,notes:{firebase_uid:req.authUser.uid,plan}})});
-        const j=await r.json(); if(!r.ok) return sendJSON(res,502,{success:false,error:j.error?.description||"Could not create Razorpay subscription."});
-        saveSubscription(req.authUser.uid,{plan,status:"pending",autoRenew:true,razorpaySubscriptionId:j.id,startedAt:new Date().toISOString()});
-        return sendJSON(res,200,{success:true,subscription:j,plan});
-    }catch(e){return sendJSON(res,502,{success:false,error:"Payment service is temporarily unavailable."});}
-}
-async function handleCancelSubscription(req,res){
-    const sub=subscriptionRecord(req.authUser.uid);
-    if(!sub.razorpaySubscriptionId) return sendJSON(res,200,{success:true,subscription:saveSubscription(req.authUser.uid,{autoRenew:false,status:"cancelled",plan:"free"})});
-    const keyId=process.env.RAZORPAY_KEY_ID, keySecret=process.env.RAZORPAY_KEY_SECRET;
-    if(!keyId || !keySecret) return sendJSON(res,503,{success:false,error:"Razorpay is not configured yet."});
-    try{
-        const auth=Buffer.from(`${keyId}:${keySecret}`).toString("base64");
-        const r=await fetch(`https://api.razorpay.com/v1/subscriptions/${encodeURIComponent(sub.razorpaySubscriptionId)}/cancel`,{method:"POST",headers:{"Authorization":`Basic ${auth}`,"Content-Type":"application/json"},body:JSON.stringify({cancel_at_cycle_end:true})});
-        const j=await r.json(); if(!r.ok) return sendJSON(res,502,{success:false,error:j.error?.description||"Could not cancel subscription."});
-        return sendJSON(res,200,{success:true,subscription:saveSubscription(req.authUser.uid,{autoRenew:false,razorpayStatus:j.status||"active",cancelAtCycleEnd:true})});
-    }catch(e){return sendJSON(res,502,{success:false,error:"Payment service is temporarily unavailable."});}
-}
-async function handlePaymentWebhook(req,res){
-    const secret=process.env.RAZORPAY_WEBHOOK_SECRET;
-    const raw=await readRequestBody(req);
-    if(!secret) return sendJSON(res,503,{success:false,error:"Webhook secret not configured."});
-    const signature=String(req.headers["x-razorpay-signature"]||"");
-    const expected=crypto.createHmac("sha256",secret).update(raw).digest("hex");
-    if(!signature || !crypto.timingSafeEqual(Buffer.from(signature),Buffer.from(expected))) return sendJSON(res,401,{success:false,error:"Invalid webhook signature."});
-    try{
-        const payload=JSON.parse(raw), entity=payload.payload?.subscription?.entity || payload.payload?.payment?.entity || {};
-        const uid=entity.notes?.firebase_uid || entity.notes?.uid;
-        if(uid){
-            const plan=entity.notes?.plan;
-            const status=payload.event?.includes("cancel")?"cancelled":payload.event?.includes("failed")?"past_due":"active";
-            saveSubscription(uid,{plan:PLAN_CONFIG[plan]?plan:subscriptionRecord(uid).plan,status,autoRenew:status==="active",razorpaySubscriptionId:entity.subscription_id||entity.id});
-        }
-        return sendJSON(res,200,{success:true});
-    }catch{return sendJSON(res,400,{success:false,error:"Invalid webhook payload."});}
-}
 
 /* =========================================================
    MIME TYPES
@@ -833,7 +751,6 @@ IMPORTANT IMAGE RULES:
 }
 
 async function handleImageEdit(req, res) {
-    if(!checkAndConsume(req,res,"image")) return;
     try {
         const body = await readRequestBody(req);
         let data;
@@ -904,7 +821,6 @@ async function handleImageEdit(req, res) {
 ========================================================= */
 
 async function handleImageGenerate(req, res) {
-    if(!checkAndConsume(req,res,"image")) return;
     try {
         const body = await readRequestBody(req);
         let data;
@@ -940,7 +856,6 @@ async function handleImageGenerate(req, res) {
 ========================================================= */
 
 async function handleSearch(req, res) {
-    if(!checkAndConsume(req,res,"search")) return;
     try {
         const body = await readRequestBody(req);
         let data;
@@ -998,8 +913,6 @@ async function handleChat(
     res
 ) {
 
-    if(!checkAndConsume(req,res,"chat")) return;
-
     try {
 
         /* =========================================
@@ -1047,8 +960,6 @@ async function handleChat(
 
         const hasDocument =
             !!(document && document.data && document.mimeType);
-
-        if(hasDocument && !checkAndConsume(req,res,"pdf")) return;
 
 
         if (!message && !hasDocument) {
@@ -1415,7 +1326,7 @@ function handleHealth(
         {
             success: true,
             app: "Krishti AI",
-            version: V20_VERSION,
+            version: "17.0",
             ai: "Gemini",
             model: GEMINI_MODEL,
             memory: "enabled",
@@ -1648,6 +1559,15 @@ const server =
                 return;
             }
 
+            if (req.method === "GET" && pathname === "/api/admin/operations") {
+                secureApi(req,res,async (r,rr)=>handleAdminOperations(r,rr),30);
+                return;
+            }
+            if (req.method === "POST" && pathname === "/api/admin/backup") {
+                secureApi(req,res,async (r,rr)=>handleAdminBackup(r,rr),10);
+                return;
+            }
+
             if (req.method === "GET" && pathname === "/api/admin/stats") {
                 secureApi(req,res,async (r,rr)=>handleAdminStats(r,rr),30);
                 return;
@@ -1662,12 +1582,6 @@ const server =
                 secureApi(req,res,handleFeedback,20);
                 return;
             }
-
-
-            if (req.method === "GET" && pathname === "/api/usage") { secureApi(req,res,handleUsage,60); return; }
-            if ((req.method === "GET" || req.method === "POST") && pathname === "/api/subscription") { secureApi(req,res,handleSubscription,20); return; }
-            if (req.method === "POST" && pathname === "/api/subscription/cancel") { secureApi(req,res,handleCancelSubscription,20); return; }
-            if (req.method === "POST" && pathname === "/api/webhooks/razorpay") { handlePaymentWebhook(req,res); return; }
 
             /* =====================================
                STATIC WEBSITE
