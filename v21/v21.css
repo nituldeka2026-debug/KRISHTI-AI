@@ -1,0 +1,19 @@
+
+/* V21 professional plan/usage panel */
+.v21-panel{position:fixed;inset:0;z-index:9999;display:none;padding:28px;background:rgba(3,7,18,.72);backdrop-filter:blur(12px);overflow:auto}
+.v21-panel.open{display:block}
+.v21-panel>div,.v21-panel-head,.v21-plan-grid,.v21-usage,.v21-note{max-width:1050px;margin-left:auto;margin-right:auto}
+.v21-panel{color:#f8fafc}
+.v21-panel-head{display:flex;justify-content:space-between;align-items:center;margin-top:5vh;margin-bottom:22px}
+.v21-panel-head h2{margin:5px 0;font-size:30px}
+.v21-kicker{font-size:12px;letter-spacing:.14em;opacity:.65}
+.v21-close{border:1px solid #334155;background:#111827;color:#fff;border-radius:12px;width:42px;height:42px;font-size:25px;cursor:pointer}
+.v21-plan-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+.v21-plan{background:#111827;border:1px solid #273043;border-radius:18px;padding:22px;min-height:150px}
+.v21-plan.featured{border-color:#6d5dfc;box-shadow:0 0 0 1px rgba(109,93,252,.2)}
+.v21-plan b{display:block;font-size:18px}.v21-plan span{display:block;font-size:25px;font-weight:800;margin:10px 0}.v21-plan p{margin:6px 0;color:#aab5c5;font-size:14px}
+.v21-usage{margin-top:18px;background:#0f172a;border:1px solid #273043;border-radius:18px;padding:20px}
+.v21-meter{margin:15px 0}.v21-meter>div{display:flex;justify-content:space-between;margin-bottom:7px;color:#cbd5e1}.v21-meter b{color:#fff}
+.v21-meter i{display:block;height:8px;border-radius:99px;background:#253047;overflow:hidden}.v21-meter em{display:block;height:100%;background:#6d5dfc;border-radius:99px}
+.v21-loading,.v21-note{color:#94a3b8}.v21-note{padding:14px 0;font-size:13px}
+@media(max-width:760px){.v21-panel{padding:16px}.v21-plan-grid{grid-template-columns:1fr}.v21-panel-head{margin-top:2vh}.v21-panel-head h2{font-size:24px}}
