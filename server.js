@@ -75,9 +75,11 @@ const GEMINI_API_KEY =
 /*
  * Current Gemini model.
  */
-const GEMINI_MODEL =
-    process.env.GEMINI_MODEL ||
-    "gemini-2.5-flash";
+// Set GEMINI_MODEL in Render only if you have verified that model is
+// available to the API key's Google AI project.
+const GEMINI_MODEL = String(
+    process.env.GEMINI_MODEL || "gemini-2.5-flash"
+).trim();
 
 
 /* =========================================================
@@ -102,6 +104,48 @@ const ADMIN_EMAIL = String(process.env.KRISHTI_ADMIN_EMAIL || "nitul.deka2026@gm
 const REQUIRE_AUTH = String(process.env.KRISHTI_REQUIRE_AUTH || "true").toLowerCase() !== "false";
 const RATE_LIMIT_WINDOW_MS = 60 * 1000;
 const rateBuckets = new Map();
+const PLAN_LIMITS = {
+    free: { dailyChat: 10, monthlyChat: 100, monthlyPdf: 10, monthlyImage: 10, monthlySearch: 20, ads: true },
+    plus: { dailyChat: 40, monthlyChat: 1000, monthlyPdf: 50, monthlyImage: 50, monthlySearch: 100, ads: false },
+    pro: { dailyChat: 100, monthlyChat: 3000, monthlyPdf: 200, monthlyImage: 200, monthlySearch: 500, ads: false }
+};
+const usageStore = new Map();
+
+function usagePeriod() {
+    const d = new Date();
+    return { day: d.toISOString().slice(0,10), month: `${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,"0")}` };
+}
+function getUsage(uid) {
+    const p = usagePeriod(), old = usageStore.get(uid);
+    if (!old || old.day !== p.day || old.month !== p.month) {
+        const fresh = { day:p.day, month:p.month, dailyChat:0, monthlyChat:0, monthlyPdf:0, monthlyImage:0, monthlySearch:0 };
+        usageStore.set(uid, fresh);
+        return fresh;
+    }
+    return old;
+}
+function getPlan(uid) {
+    const all = readJsonFile(USERS_FILE, {});
+    const record = all[String(uid)] || {};
+    const plan = String(record.plan || "free").toLowerCase();
+    return PLAN_LIMITS[plan] ? plan : "free";
+}
+function usageSnapshot(uid) {
+    const plan = getPlan(uid);
+    return { plan, usage:{...getUsage(uid)}, limits:{...PLAN_LIMITS[plan]} };
+}
+function consumeUsage(uid, type) {
+    const snap = usageSnapshot(uid), u = getUsage(uid), l = snap.limits;
+    const monthlyKey = {chat:"monthlyChat", pdf:"monthlyPdf", image:"monthlyImage", search:"monthlySearch"}[type];
+    if (type === "chat" && u.dailyChat >= l.dailyChat)
+        return {ok:false, code:"DAILY_LIMIT", error:"Daily AI limit reached.", ...snap};
+    if (monthlyKey && u[monthlyKey] >= l[monthlyKey])
+        return {ok:false, code:"MONTHLY_LIMIT", error:"Monthly plan limit reached. Upgrade your KRISHTI plan for more usage.", ...snap};
+    if (type === "chat") u.dailyChat++;
+    if (monthlyKey) u[monthlyKey]++;
+    return {ok:true, ...usageSnapshot(uid)};
+}
+
 
 const DEFAULT_SETTINGS = {
     profile: { displayName: "Krishti User", aiNickname: "Krishti" },
@@ -214,6 +258,18 @@ async function secureApi(req,res,handler,limit=30){
         if(REQUIRE_AUTH){
             user=await verifyFirebaseRequest(req);
             req.authUser=user;
+        }
+        const pathname = new URL(req.url, `http://${req.headers.host || "localhost"}`).pathname;
+        const usageType =
+            pathname === "/api/chat" ? "chat" :
+            pathname === "/api/image-generate" || pathname === "/api/image-edit" ? "image" :
+            pathname === "/api/search" ? "search" : null;
+        if (user && usageType) {
+            const quota = consumeUsage(user.uid, usageType);
+            if (!quota.ok) return sendJSON(res, 429, {
+                success:false, error:quota.error, code:quota.code,
+                plan:quota.plan, usage:quota.usage, limits:quota.limits
+            });
         }
         const retry=checkRateLimit(req,user,limit);
         if(retry) {
@@ -1278,7 +1334,7 @@ function handleHealth(
         {
             success: true,
             app: "Krishti AI",
-            version: "17.0",
+            version: "18.0.0",
             ai: "Gemini",
             model: GEMINI_MODEL,
             memory: "enabled",
@@ -1513,6 +1569,11 @@ const server =
 
             if (req.method === "GET" && pathname === "/api/admin/stats") {
                 secureApi(req,res,async (r,rr)=>handleAdminStats(r,rr),30);
+                return;
+            }
+
+            if (req.method === "GET" && pathname === "/api/usage") {
+                secureApi(req,res,async (r,rr)=>sendJSON(rr,200,{success:true,...usageSnapshot(r.authUser.uid)}),60);
                 return;
             }
 
