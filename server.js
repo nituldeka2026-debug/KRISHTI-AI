@@ -55,6 +55,9 @@ const {
     GoogleGenAI
 } = require("@google/genai");
 
+const { getUsage, checkAndConsume, setPlan, DEFAULT_LIMITS } = require("./v21/v21-usage");
+
+
 
 /* =========================================================
    KRISHTI AI V2 — SERVER CONFIG
@@ -355,6 +358,40 @@ async function handleAdminStats(req,res){
     }catch(error){ return sendJSON(res,error.statusCode || 500,{success:false,error:error.message || "Could not load admin dashboard."}); }
 }
 
+
+
+/* =========================================================
+   KRISHTI AI V21 — USAGE / PLAN APIs
+========================================================= */
+async function handleV21Usage(req,res){
+    const user = await verifyFirebaseRequest(req);
+    const usage = getUsage(user);
+    const limits = DEFAULT_LIMITS[usage.plan] || DEFAULT_LIMITS.free;
+    return sendJSON(res,200,{success:true, plan:usage.plan, month:usage.month, used:usage.used, limits});
+}
+async function handleV21Consume(req,res){
+    const user = await verifyFirebaseRequest(req);
+    const body = await readRequestBody(req);
+    let data;
+    try { data = JSON.parse(body || "{}"); } catch { return sendJSON(res,400,{success:false,error:"Invalid JSON request."}); }
+    try {
+        const result = checkAndConsume(user, String(data.type || ""), Number(data.amount || 1));
+        return sendJSON(res,200,{success:true,...result});
+    } catch(error) {
+        return sendJSON(res,error.statusCode || 400,{success:false,error:error.message,usage:error.usage || null});
+    }
+}
+async function handleV21Plan(req,res){
+    const admin = await requireAdmin(req);
+    const body = await readRequestBody(req);
+    let data;
+    try { data=JSON.parse(body||"{}"); } catch { return sendJSON(res,400,{success:false,error:"Invalid JSON request."}); }
+    const uid=String(data.uid||"");
+    const plan=String(data.plan||"free");
+    if(!uid || !DEFAULT_LIMITS[plan]) return sendJSON(res,400,{success:false,error:"Valid uid and plan are required."});
+    const result=setPlan(uid,plan);
+    return sendJSON(res,200,{success:true,admin:admin.email||"",result});
+}
 
 /* =========================================================
    MIME TYPES
@@ -1580,6 +1617,20 @@ const server =
 
             if (req.method === "POST" && pathname === "/api/feedback") {
                 secureApi(req,res,handleFeedback,20);
+                return;
+            }
+
+
+            if (req.method === "GET" && pathname === "/api/v21/usage") {
+                secureApi(req,res,handleV21Usage,60);
+                return;
+            }
+            if (req.method === "POST" && pathname === "/api/v21/consume") {
+                secureApi(req,res,handleV21Consume,60);
+                return;
+            }
+            if (req.method === "POST" && pathname === "/api/v21/plan") {
+                secureApi(req,res,handleV21Plan,20);
                 return;
             }
 
