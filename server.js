@@ -77,7 +77,7 @@ const GEMINI_API_KEY =
  */
 const GEMINI_MODEL =
     process.env.GEMINI_MODEL ||
-    "gemini-3.6-flash";
+    "gemini-2.5-flash";
 
 
 /* =========================================================
@@ -98,7 +98,6 @@ const DATA_DIR = path.join(ROOT, "data");
 const SETTINGS_FILE = path.join(DATA_DIR, "settings.json");
 const FEEDBACK_FILE = path.join(DATA_DIR, "feedback.json");
 const USERS_FILE = path.join(DATA_DIR, "users.json");
-const USAGE_FILE = path.join(DATA_DIR, "usage.json");
 const ADMIN_EMAIL = String(process.env.KRISHTI_ADMIN_EMAIL || "nitul.deka2026@gmail.com").trim().toLowerCase();
 const REQUIRE_AUTH = String(process.env.KRISHTI_REQUIRE_AUTH || "true").toLowerCase() !== "false";
 const RATE_LIMIT_WINDOW_MS = 60 * 1000;
@@ -120,7 +119,6 @@ function ensureDataStore(){
     if(!fs.existsSync(SETTINGS_FILE)) fs.writeFileSync(SETTINGS_FILE, JSON.stringify({}, null, 2));
     if(!fs.existsSync(FEEDBACK_FILE)) fs.writeFileSync(FEEDBACK_FILE, JSON.stringify([], null, 2));
     if(!fs.existsSync(USERS_FILE)) fs.writeFileSync(USERS_FILE, JSON.stringify({}, null, 2));
-    if(!fs.existsSync(USAGE_FILE)) fs.writeFileSync(USAGE_FILE, JSON.stringify({}, null, 2));
 }
 function readJsonFile(file, fallback){
     try { return JSON.parse(fs.readFileSync(file, "utf8")); } catch { return fallback; }
@@ -130,135 +128,6 @@ function writeJsonFile(file, value){
     const tmp = file + ".tmp";
     fs.writeFileSync(tmp, JSON.stringify(value, null, 2));
     fs.renameSync(tmp, file);
-}
-
-
-/* =========================================================
-   V19 — SERVER-SIDE PLAN + USAGE LIMITS
-   These limits protect the Gemini API from uncontrolled usage.
-   Paid entitlements are intentionally not granted by the client.
-========================================================= */
-const PLAN_LIMITS = {
-    free:  { name:"Free",  chatsDay:10,  chatsMonth:100,  documentsMonth:10,  imagesMonth:10,  searchesMonth:20,  ads:true  },
-    plus:  { name:"Plus",  chatsDay:40,  chatsMonth:1000, documentsMonth:50,  imagesMonth:50,  searchesMonth:100, ads:false },
-    pro:   { name:"Pro",   chatsDay:100, chatsMonth:3000, documentsMonth:200, imagesMonth:200, searchesMonth:500, ads:false }
-};
-
-function usageDayKey(date = new Date()) {
-    return date.toISOString().slice(0,10);
-}
-function usageMonthKey(date = new Date()) {
-    return date.toISOString().slice(0,7);
-}
-function normalisePlan(value) {
-    const plan = String(value || "free").trim().toLowerCase();
-    return PLAN_LIMITS[plan] ? plan : "free";
-}
-function getPlanForUser(user) {
-    const uid = String(user?.uid || "");
-    const email = String(user?.email || "").trim().toLowerCase();
-    const premiumEmails = String(process.env.KRISHTI_PREMIUM_EMAILS || "")
-        .split(",").map(x => x.trim().toLowerCase()).filter(Boolean);
-    const proEmails = String(process.env.KRISHTI_PRO_EMAILS || "")
-        .split(",").map(x => x.trim().toLowerCase()).filter(Boolean);
-    if (email && proEmails.includes(email)) return "pro";
-    if (email && premiumEmails.includes(email)) return "plus";
-    return "free";
-}
-function usageKey(user) {
-    return crypto.createHash("sha256").update(String(user?.uid || "unknown-user")).digest("hex");
-}
-function emptyUsage() {
-    return { day: usageDayKey(), month: usageMonthKey(), chatsDay:0, chatsMonth:0, documentsMonth:0, imagesMonth:0, searchesMonth:0, updatedAt:new Date().toISOString() };
-}
-function getUsageRecord(user) {
-    ensureDataStore();
-    const all = readJsonFile(USAGE_FILE, {});
-    const key = usageKey(user);
-    const current = { ...emptyUsage(), ...(all[key] || {}) };
-    const day = usageDayKey();
-    const month = usageMonthKey();
-    if (current.day !== day) { current.day = day; current.chatsDay = 0; }
-    if (current.month !== month) {
-        current.month = month;
-        current.chatsMonth = 0;
-        current.documentsMonth = 0;
-        current.imagesMonth = 0;
-        current.searchesMonth = 0;
-    }
-    all[key] = current;
-    writeJsonFile(USAGE_FILE, all);
-    return current;
-}
-function saveUsageRecord(user, record) {
-    ensureDataStore();
-    const all = readJsonFile(USAGE_FILE, {});
-    all[usageKey(user)] = { ...record, updatedAt:new Date().toISOString() };
-    writeJsonFile(USAGE_FILE, all);
-}
-function usageSnapshot(user) {
-    const planId = getPlanForUser(user);
-    const plan = PLAN_LIMITS[planId];
-    const usage = getUsageRecord(user);
-    return {
-        plan: planId,
-        planName: plan.name,
-        ads: plan.ads,
-        usage: {
-            chatsDay: usage.chatsDay,
-            chatsMonth: usage.chatsMonth,
-            documentsMonth: usage.documentsMonth,
-            imagesMonth: usage.imagesMonth,
-            searchesMonth: usage.searchesMonth
-        },
-        limits: {
-            chatsDay: plan.chatsDay,
-            chatsMonth: plan.chatsMonth,
-            documentsMonth: plan.documentsMonth,
-            imagesMonth: plan.imagesMonth,
-            searchesMonth: plan.searchesMonth
-        },
-        reset: { day: usage.day, month: usage.month },
-        paymentReady: false
-    };
-}
-function consumeUsage(user, action, amount = 1) {
-    const actions = Array.isArray(action) ? action : [action];
-    const planId = getPlanForUser(user);
-    const plan = PLAN_LIMITS[planId];
-    const usage = getUsageRecord(user);
-    const checks = {
-        chat: [usage.chatsDay, plan.chatsDay, "Daily chat limit reached."],
-        chatMonth: [usage.chatsMonth, plan.chatsMonth, "Monthly chat limit reached."],
-        document: [usage.documentsMonth, plan.documentsMonth, "Monthly PDF/document limit reached."],
-        image: [usage.imagesMonth, plan.imagesMonth, "Monthly image limit reached."],
-        search: [usage.searchesMonth, plan.searchesMonth, "Monthly web-search limit reached."]
-    };
-    const pending = {};
-    for (const a of actions) {
-        if (!checks[a]) continue;
-        pending[a] = (pending[a] || 0) + amount;
-        if (checks[a][0] + pending[a] > checks[a][1]) {
-            const snapshot = usageSnapshot(user);
-            return { ok:false, snapshot, error:checks[a][2] };
-        }
-    }
-    if (pending.chat) { usage.chatsDay += pending.chat; usage.chatsMonth += pending.chat; }
-    if (pending.document) usage.documentsMonth += pending.document;
-    if (pending.image) usage.imagesMonth += pending.image;
-    if (pending.search) usage.searchesMonth += pending.search;
-    if (Object.keys(pending).length) saveUsageRecord(user, usage);
-    return { ok:true, snapshot:usageSnapshot(user) };
-}
-function enforceUsage(req, res, action) {
-    const result = consumeUsage(req.authUser, action, 1);
-    if (result.ok) return true;
-    res.setHeader("Retry-After", "3600");
-    sendJSON(res, 429, { success:false, code:"KRISHTI_PLAN_LIMIT", error:result.error, usage:result.snapshot });
-    return false;
-}
-function handleUsage(req, res) {
-    return sendJSON(res, 200, { success:true, ...usageSnapshot(req.authUser) });
 }
 function mergeSettings(base, incoming){
     const out = { ...base };
@@ -438,6 +307,136 @@ async function handleAdminStats(req,res){
     }catch(error){ return sendJSON(res,error.statusCode || 500,{success:false,error:error.message || "Could not load admin dashboard."}); }
 }
 
+
+
+/* =========================================================
+   KRISHTI AI V20 — PLANS, USAGE & SUBSCRIPTIONS
+========================================================= */
+const V20_VERSION = "20.0.0";
+const USAGE_FILE = path.join(DATA_DIR, "usage.json");
+const SUBSCRIPTIONS_FILE = path.join(DATA_DIR, "subscriptions.json");
+const PLAN_CONFIG = {
+    free:  { name:"Free",  price:0,   ads:true,  chatsDaily:10,  chatsMonthly:100,  pdfMonthly:10,  imageMonthly:10,  searchMonthly:20 },
+    plus:  { name:"Plus",  price:99,  ads:false, chatsDaily:40,  chatsMonthly:1000, pdfMonthly:50, imageMonthly:50, searchMonthly:100 },
+    pro:   { name:"Pro",   price:299, ads:false, chatsDaily:100, chatsMonthly:3000, pdfMonthly:200,imageMonthly:200,searchMonthly:500 }
+};
+
+function ensureV20Store(){
+    ensureDataStore();
+    if(!fs.existsSync(USAGE_FILE)) fs.writeFileSync(USAGE_FILE, JSON.stringify({},null,2));
+    if(!fs.existsSync(SUBSCRIPTIONS_FILE)) fs.writeFileSync(SUBSCRIPTIONS_FILE, JSON.stringify({},null,2));
+}
+function todayKey(){ return new Date().toISOString().slice(0,10); }
+function monthKey(){ return new Date().toISOString().slice(0,7); }
+function getUserPlan(uid){
+    ensureV20Store();
+    const subs=readJsonFile(SUBSCRIPTIONS_FILE,{});
+    const sub=subs[String(uid)] || {};
+    if(sub.status === "active" && sub.expiresAt && Date.parse(sub.expiresAt) <= Date.now()) return "free";
+    return PLAN_CONFIG[sub.plan] ? sub.plan : "free";
+}
+function getUsageRecord(uid){
+    ensureV20Store();
+    const all=readJsonFile(USAGE_FILE,{});
+    const key=String(uid);
+    const old=all[key] || {};
+    const record={
+        day: old.day===todayKey()?old.day:todayKey(),
+        month: old.month===monthKey()?old.month:monthKey(),
+        chatsDaily: old.day===todayKey()?(old.chatsDaily||0):0,
+        chatsMonthly: old.month===monthKey()?(old.chatsMonthly||0):0,
+        pdfMonthly: old.month===monthKey()?(old.pdfMonthly||0):0,
+        imageMonthly: old.month===monthKey()?(old.imageMonthly||0):0,
+        searchMonthly: old.month===monthKey()?(old.searchMonthly||0):0,
+        total: old.total||0
+    };
+    all[key]=record; writeJsonFile(USAGE_FILE,all); return record;
+}
+function usageForAction(uid, action){
+    const u=getUsageRecord(uid);
+    if(action==="chat") return {used:u.chatsDaily,limit:PLAN_CONFIG[getUserPlan(uid)].chatsDaily,period:"daily"};
+    if(action==="pdf") return {used:u.pdfMonthly,limit:PLAN_CONFIG[getUserPlan(uid)].pdfMonthly,period:"monthly"};
+    if(action==="image") return {used:u.imageMonthly,limit:PLAN_CONFIG[getUserPlan(uid)].imageMonthly,period:"monthly"};
+    if(action==="search") return {used:u.searchMonthly,limit:PLAN_CONFIG[getUserPlan(uid)].searchMonthly,period:"monthly"};
+    return null;
+}
+function consumeUsage(uid, action){
+    const all=readJsonFile(USAGE_FILE,{}); const u=getUsageRecord(uid);
+    if(action==="chat"){u.chatsDaily++;u.chatsMonthly++;}
+    if(action==="pdf"){u.pdfMonthly++;}
+    if(action==="image"){u.imageMonthly++;}
+    if(action==="search"){u.searchMonthly++;}
+    u.total++;
+    all[String(uid)]=u; writeJsonFile(USAGE_FILE,all); return u;
+}
+function checkAndConsume(req,res,action){
+    const uid=req.authUser?.uid;
+    if(!uid) return true;
+    const info=usageForAction(uid,action);
+    if(info && info.used >= info.limit){
+        res.setHeader("Retry-After", info.period==="daily"?String(86400):String(2592000));
+        sendJSON(res,429,{success:false,code:"USAGE_LIMIT_REACHED",error:`${PLAN_CONFIG[getUserPlan(uid)].name} ${action} limit reached. Upgrade your plan or try again after the limit resets.`,plan:getUserPlan(uid),usage:info});
+        return false;
+    }
+    consumeUsage(uid,action); return true;
+}
+function subscriptionRecord(uid){
+    ensureV20Store(); const all=readJsonFile(SUBSCRIPTIONS_FILE,{}); return all[String(uid)] || {plan:"free",status:"active",autoRenew:false};
+}
+function saveSubscription(uid, value){
+    ensureV20Store(); const all=readJsonFile(SUBSCRIPTIONS_FILE,{}); all[String(uid)]={...subscriptionRecord(uid),...value,updatedAt:new Date().toISOString()}; writeJsonFile(SUBSCRIPTIONS_FILE,all); return all[String(uid)];
+}
+function v20UsagePayload(uid){
+    const plan=getUserPlan(uid), cfg=PLAN_CONFIG[plan], u=getUsageRecord(uid), sub=subscriptionRecord(uid);
+    return {plan,planName:cfg.name,price:cfg.price,ads:cfg.ads,limits:{chatsDaily:cfg.chatsDaily,chatsMonthly:cfg.chatsMonthly,pdfMonthly:cfg.pdfMonthly,imageMonthly:cfg.imageMonthly,searchMonthly:cfg.searchMonthly},usage:{chatsDaily:u.chatsDaily,chatsMonthly:u.chatsMonthly,pdfMonthly:u.pdfMonthly,imageMonthly:u.imageMonthly,searchMonthly:u.searchMonthly},subscription:sub};
+}
+async function handleUsage(req,res){ return sendJSON(res,200,{success:true,version:V20_VERSION,...v20UsagePayload(req.authUser.uid)}); }
+async function handleSubscription(req,res){
+    const method=req.method;
+    if(method==="GET") return sendJSON(res,200,{success:true,...v20UsagePayload(req.authUser.uid)});
+    let data; try{ data=JSON.parse(await readRequestBody(req)); }catch{return sendJSON(res,400,{success:false,error:"Invalid JSON request."});}
+    const plan=String(data.plan||"").toLowerCase();
+    if(!["plus","pro"].includes(plan)) return sendJSON(res,400,{success:false,error:"Choose Plus or Pro."});
+    const keyId=process.env.RAZORPAY_KEY_ID, keySecret=process.env.RAZORPAY_KEY_SECRET;
+    if(!keyId || !keySecret) return sendJSON(res,503,{success:false,code:"PAYMENT_NOT_CONFIGURED",error:"Razorpay is not configured yet. Your subscription system is ready, but live payment is disabled until Razorpay keys are added."});
+    try{
+        const auth=Buffer.from(`${keyId}:${keySecret}`).toString("base64");
+        const r=await fetch("https://api.razorpay.com/v1/subscriptions",{method:"POST",headers:{"Authorization":`Basic ${auth}`,"Content-Type":"application/json"},body:JSON.stringify({plan_id:plan==="plus"?process.env.RAZORPAY_PLUS_PLAN_ID:process.env.RAZORPAY_PRO_PLAN_ID,total_count:120,customer_notify:1,notes:{firebase_uid:req.authUser.uid,plan}})});
+        const j=await r.json(); if(!r.ok) return sendJSON(res,502,{success:false,error:j.error?.description||"Could not create Razorpay subscription."});
+        saveSubscription(req.authUser.uid,{plan,status:"pending",autoRenew:true,razorpaySubscriptionId:j.id,startedAt:new Date().toISOString()});
+        return sendJSON(res,200,{success:true,subscription:j,plan});
+    }catch(e){return sendJSON(res,502,{success:false,error:"Payment service is temporarily unavailable."});}
+}
+async function handleCancelSubscription(req,res){
+    const sub=subscriptionRecord(req.authUser.uid);
+    if(!sub.razorpaySubscriptionId) return sendJSON(res,200,{success:true,subscription:saveSubscription(req.authUser.uid,{autoRenew:false,status:"cancelled",plan:"free"})});
+    const keyId=process.env.RAZORPAY_KEY_ID, keySecret=process.env.RAZORPAY_KEY_SECRET;
+    if(!keyId || !keySecret) return sendJSON(res,503,{success:false,error:"Razorpay is not configured yet."});
+    try{
+        const auth=Buffer.from(`${keyId}:${keySecret}`).toString("base64");
+        const r=await fetch(`https://api.razorpay.com/v1/subscriptions/${encodeURIComponent(sub.razorpaySubscriptionId)}/cancel`,{method:"POST",headers:{"Authorization":`Basic ${auth}`,"Content-Type":"application/json"},body:JSON.stringify({cancel_at_cycle_end:true})});
+        const j=await r.json(); if(!r.ok) return sendJSON(res,502,{success:false,error:j.error?.description||"Could not cancel subscription."});
+        return sendJSON(res,200,{success:true,subscription:saveSubscription(req.authUser.uid,{autoRenew:false,razorpayStatus:j.status||"active",cancelAtCycleEnd:true})});
+    }catch(e){return sendJSON(res,502,{success:false,error:"Payment service is temporarily unavailable."});}
+}
+async function handlePaymentWebhook(req,res){
+    const secret=process.env.RAZORPAY_WEBHOOK_SECRET;
+    const raw=await readRequestBody(req);
+    if(!secret) return sendJSON(res,503,{success:false,error:"Webhook secret not configured."});
+    const signature=String(req.headers["x-razorpay-signature"]||"");
+    const expected=crypto.createHmac("sha256",secret).update(raw).digest("hex");
+    if(!signature || !crypto.timingSafeEqual(Buffer.from(signature),Buffer.from(expected))) return sendJSON(res,401,{success:false,error:"Invalid webhook signature."});
+    try{
+        const payload=JSON.parse(raw), entity=payload.payload?.subscription?.entity || payload.payload?.payment?.entity || {};
+        const uid=entity.notes?.firebase_uid || entity.notes?.uid;
+        if(uid){
+            const plan=entity.notes?.plan;
+            const status=payload.event?.includes("cancel")?"cancelled":payload.event?.includes("failed")?"past_due":"active";
+            saveSubscription(uid,{plan:PLAN_CONFIG[plan]?plan:subscriptionRecord(uid).plan,status,autoRenew:status==="active",razorpaySubscriptionId:entity.subscription_id||entity.id});
+        }
+        return sendJSON(res,200,{success:true});
+    }catch{return sendJSON(res,400,{success:false,error:"Invalid webhook payload."});}
+}
 
 /* =========================================================
    MIME TYPES
@@ -723,27 +722,6 @@ Now answer the user.
    GEMINI ERROR MESSAGE
 ========================================================= */
 
-
-function geminiStatus(error) {
-    return Number(error?.status || error?.code || error?.response?.status || 0);
-}
-function isGeminiRateLimit(error) {
-    const status = geminiStatus(error);
-    const text = String(error?.message || "").toLowerCase();
-    return status === 429 || text.includes("resource_exhausted") || text.includes("quota") || text.includes("rate limit") || text.includes("too many requests");
-}
-function sendGeminiFailure(res, error) {
-    if (isGeminiRateLimit(error)) {
-        return sendJSON(res, 429, {
-            success:false,
-            code:"GEMINI_RATE_LIMIT",
-            error:"Gemini API limit reached. Please try again later or check your Gemini project usage/quota.",
-            retryAfterSeconds:60
-        });
-    }
-    return sendText(res, 500, getGeminiErrorMessage(error));
-}
-
 function getGeminiErrorMessage(
     error
 ) {
@@ -855,6 +833,7 @@ IMPORTANT IMAGE RULES:
 }
 
 async function handleImageEdit(req, res) {
+    if(!checkAndConsume(req,res,"image")) return;
     try {
         const body = await readRequestBody(req);
         let data;
@@ -880,7 +859,6 @@ async function handleImageEdit(req, res) {
         if (!prompt) {
             return sendJSON(res, 400, { success: false, error: "Please write what you want to change in the photo." });
         }
-        if (!enforceUsage(req, res, "image")) return;
 
         if (!["image/jpeg", "image/png", "image/webp"].includes(mimeType)) {
             return sendJSON(res, 400, { success: false, error: "Only JPG, PNG and WEBP images are supported." });
@@ -916,7 +894,7 @@ async function handleImageEdit(req, res) {
 
     } catch (error) {
         console.error("Image edit API error:", error);
-        return sendGeminiFailure(res, error);
+        return sendJSON(res, 500, { success: false, error: getGeminiErrorMessage(error) });
     }
 }
 
@@ -926,6 +904,7 @@ async function handleImageEdit(req, res) {
 ========================================================= */
 
 async function handleImageGenerate(req, res) {
+    if(!checkAndConsume(req,res,"image")) return;
     try {
         const body = await readRequestBody(req);
         let data;
@@ -935,7 +914,6 @@ async function handleImageGenerate(req, res) {
         const era = typeof data.era === "string" ? data.era.trim().toLowerCase() : "none";
         if (!GEMINI_API_KEY) return sendJSON(res,500,{success:false,error:"Gemini API key is not configured on the server."});
         if (!prompt) return sendJSON(res,400,{success:false,error:"Please describe the image you want Krishti to create."});
-        if (!enforceUsage(req, res, "image")) return;
         const eraInstruction = era === "past"
             ? "Transform the concept into a believable past-era photograph. Use historically appropriate clothing, architecture, objects, film grain, lighting and camera characteristics."
             : era === "future"
@@ -953,7 +931,7 @@ async function handleImageGenerate(req, res) {
         return sendJSON(res,200,{success:true,image:imagePart.inlineData.data,mimeType:imagePart.inlineData.mimeType||"image/png"});
     } catch(error) {
         console.error("Image generation API error:",error);
-        return sendGeminiFailure(res, error);
+        return sendJSON(res,500,{success:false,error:getGeminiErrorMessage(error)});
     }
 }
 
@@ -962,6 +940,7 @@ async function handleImageGenerate(req, res) {
 ========================================================= */
 
 async function handleSearch(req, res) {
+    if(!checkAndConsume(req,res,"search")) return;
     try {
         const body = await readRequestBody(req);
         let data;
@@ -970,7 +949,6 @@ async function handleSearch(req, res) {
 
         const message = typeof data.message === "string" ? data.message.trim() : "";
         if (!message) return sendJSON(res, 400, { success: false, error: "Please enter a search query." });
-        if (!enforceUsage(req, res, "search")) return;
         if (message.length > MAX_MESSAGE_LENGTH) return sendJSON(res, 400, { success: false, error: "Search query is too long." });
         if (!GEMINI_API_KEY) return sendText(res, 500, "Gemini API key is not configured on the server.");
 
@@ -988,7 +966,7 @@ async function handleSearch(req, res) {
             });
         } catch (error) {
             console.error("Gemini web search error:", error);
-            return sendGeminiFailure(res, error);
+            return sendText(res, 500, getGeminiErrorMessage(error));
         }
 
         let text = typeof result?.text === "string" ? result.text : "";
@@ -1019,6 +997,8 @@ async function handleChat(
     req,
     res
 ) {
+
+    if(!checkAndConsume(req,res,"chat")) return;
 
     try {
 
@@ -1068,6 +1048,8 @@ async function handleChat(
         const hasDocument =
             !!(document && document.data && document.mimeType);
 
+        if(hasDocument && !checkAndConsume(req,res,"pdf")) return;
+
 
         if (!message && !hasDocument) {
 
@@ -1098,8 +1080,6 @@ async function handleChat(
             );
         }
 
-
-        if (!enforceUsage(req, res, hasDocument ? ["chat", "document"] : "chat")) return;
 
         /* =========================================
            API KEY CHECK
@@ -1219,6 +1199,7 @@ async function handleChat(
                 const status = Number(error?.status || error?.code || 0);
                 const errorText = String(error?.message || "").toLowerCase();
                 const isTemporary =
+                    status === 429 ||
                     status === 500 ||
                     status === 502 ||
                     status === 503 ||
@@ -1248,7 +1229,13 @@ async function handleChat(
             );
 
 
-            return sendGeminiFailure(res, error);
+            return sendText(
+                res,
+                500,
+                getGeminiErrorMessage(
+                    error
+                )
+            );
         }
 
 
@@ -1428,14 +1415,13 @@ function handleHealth(
         {
             success: true,
             app: "Krishti AI",
-            version: "19.0.0",
+            version: V20_VERSION,
             ai: "Gemini",
             model: GEMINI_MODEL,
             memory: "enabled",
             streaming: true,
             imageEditing: true,
             imageModel: IMAGE_EDIT_MODEL,
-            plans: Object.keys(PLAN_LIMITS),
             status: "online"
         }
     );
@@ -1657,11 +1643,6 @@ const server =
 
 
 
-            if (req.method === "GET" && pathname === "/api/usage") {
-                secureApi(req,res,handleUsage,60);
-                return;
-            }
-
             if (req.method === "POST" && pathname === "/api/activity") {
                 secureApi(req,res,handleActivity,60);
                 return;
@@ -1681,6 +1662,12 @@ const server =
                 secureApi(req,res,handleFeedback,20);
                 return;
             }
+
+
+            if (req.method === "GET" && pathname === "/api/usage") { secureApi(req,res,handleUsage,60); return; }
+            if ((req.method === "GET" || req.method === "POST") && pathname === "/api/subscription") { secureApi(req,res,handleSubscription,20); return; }
+            if (req.method === "POST" && pathname === "/api/subscription/cancel") { secureApi(req,res,handleCancelSubscription,20); return; }
+            if (req.method === "POST" && pathname === "/api/webhooks/razorpay") { handlePaymentWebhook(req,res); return; }
 
             /* =====================================
                STATIC WEBSITE
@@ -1753,7 +1740,7 @@ server.listen(
         );
 
         console.log(
-            "        KRISHTI AI V19"
+            "        KRISHTI AI V2"
         );
 
         console.log(
@@ -1789,7 +1776,7 @@ server.listen(
         );
 
         console.log(
-            "KRISHTI AI V19 is ready!"
+            "KRISHTI AI V4 is ready!"
         );
 
         console.log(

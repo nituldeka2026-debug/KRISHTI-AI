@@ -1,7 +1,7 @@
 {
   "name": "krishti-ai",
-  "version": "19.0.0",
-  "description": "Krishti AI V19 production foundation with Firebase auth, server-side usage limits, Gemini protection, cloud sync and admin analytics.",
+  "version": "20.0.0",
+  "description": "Krishti AI V20 professional build with Gemini, Firebase auth, plans, usage controls and Razorpay-ready subscriptions.",
   "main": "server.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
